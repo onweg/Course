@@ -347,6 +347,69 @@ func UpdateTraining(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Обновлена тренировка с ID: %d", id)
 }
 
+// // UpdateTrainingStatus позволяет тренеру-творцу или админу поменять статус тренировки
+// func UpdateTrainingStatus(w http.ResponseWriter, r *http.Request) {
+// 	vars := mux.Vars(r)
+// 	id, err := strconv.Atoi(vars["id"])
+// 	if err != nil {
+// 		http.Error(w, "Неверный ID", http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	type statusReq struct {
+// 		Status string `json:"status"`
+// 	}
+// 	var req statusReq
+// 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	// Валидация статуса
+// 	if req.Status != "scheduled" && req.Status != "completed" && req.Status != "cancelled" {
+// 		http.Error(w, "Недопустимый статус", http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	// Получаем пользователя из токена и проверяем права
+// 	token := r.Header.Get("Authorization")
+// 	var userRole string
+// 	var userID int
+// 	var trainingTrainerID int
+// 	err = database.DB.QueryRow(`
+// 		SELECT u.role, u.id, t.trainer_id
+// 		FROM sessions s
+// 		JOIN users u ON s.user_id = u.id
+// 		JOIN trainings t ON t.id = $1
+// 		WHERE s.token = $2 AND s.expires_at > NOW()
+// 	`, id, token).Scan(&userRole, &userID, &trainingTrainerID)
+
+// 	if err != nil {
+// 		http.Error(w, "Недействительный токен", http.StatusUnauthorized)
+// 		return
+// 	}
+
+// 	if userRole != "admin" && userID != trainingTrainerID {
+// 		http.Error(w, "Доступ запрещен. Только создатель тренировки или администратор могут менять статус", http.StatusForbidden)
+// 		return
+// 	}
+
+// 	_, err = database.DB.Exec(`
+// 		UPDATE trainings
+// 		SET status = $1
+// 		WHERE id = $2
+// 	`, req.Status, id)
+
+// 	if err != nil {
+// 		log.Printf("Ошибка обновления статуса: %v", err)
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	w.WriteHeader(http.StatusOK)
+// 	log.Printf("Обновлен статус тренировки %d -> %s", id, req.Status)
+// }
+
 // DeleteTraining удаляет тренировку (только админ)
 func DeleteTraining(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -567,3 +630,60 @@ func CancelRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Регистрация пользователя %d на тренировку %d отменена", userID, trainingID)
 }
 
+// UpdateTrainingStatus позволяет тренеру или админу поменять статус тренировки
+func UpdateTrainingStatus(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    id, err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Error(w, "Неверный ID", http.StatusBadRequest)
+        return
+    }
+
+    type statusReq struct {
+        Status string `json:"status"`
+    }
+    var req statusReq
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+        return
+    }
+
+    // Валидация статуса
+    if req.Status != "scheduled" && req.Status != "completed" && req.Status != "cancelled" {
+        http.Error(w, "Недопустимый статус", http.StatusBadRequest)
+        return
+    }
+
+    // Получаем пользователя из токена и проверяем права
+    token := r.Header.Get("Authorization")
+    var userRole string
+    var userID int
+    var trainingTrainerID int
+    err = database.DB.QueryRow(`
+        SELECT u.role, u.id, t.trainer_id
+        FROM sessions s
+        JOIN users u ON s.user_id = u.id
+        JOIN trainings t ON t.id = $1
+        WHERE s.token = $2 AND s.expires_at > NOW()
+    `, id, token).Scan(&userRole, &userID, &trainingTrainerID)
+
+    if err != nil {
+        http.Error(w, "Недействительный токен", http.StatusUnauthorized)
+        return
+    }
+
+    if userRole != "admin" && userID != trainingTrainerID {
+        http.Error(w, "Доступ запрещен", http.StatusForbidden)
+        return
+    }
+
+    _, err = database.DB.Exec(`UPDATE trainings SET status = $1 WHERE id = $2`, req.Status, id)
+    if err != nil {
+        log.Printf("Ошибка обновления статуса: %v", err)
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    log.Printf("Обновлен статус тренировки %d -> %s", id, req.Status)
+}

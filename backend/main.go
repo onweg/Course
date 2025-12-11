@@ -50,10 +50,12 @@ func main() {
 	// Важно: более специфичные маршруты должны быть объявлены раньше
 	api.HandleFunc("/trainings/{id}/register", handlers.RegisterForTraining).Methods("POST")
 	api.HandleFunc("/trainings/{id}/cancel", handlers.CancelRegistration).Methods("POST")
+	// Статус меняем внутри API subrouter, чтобы путь корректно матчился и не уходил в 404/CORS
+	api.Handle("/trainings/{id:[0-9]+}/status", middleware.TrainerOrAdmin(http.HandlerFunc(handlers.UpdateTrainingStatus))).Methods("PUT")
 	api.HandleFunc("/trainings", handlers.GetTrainings).Methods("GET")
 	api.Handle("/trainings", middleware.TrainerOrAdmin(http.HandlerFunc(handlers.CreateTraining))).Methods("POST")
 	api.HandleFunc("/trainings/{id}", handlers.GetTraining).Methods("GET")
-	api.HandleFunc("/trainings/{id}", handlers.UpdateTraining).Methods("PUT")
+	api.Handle("/trainings/{id}", middleware.TrainerOrAdmin(http.HandlerFunc(handlers.UpdateTraining))).Methods("PUT")
 	api.Handle("/trainings/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteTraining))).Methods("DELETE")
 
 	// API маршруты для клиентов
@@ -76,6 +78,13 @@ func main() {
 
 	// Обработчик для несуществующих маршрутов (для отладки)
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Добавляем CORS заголовки даже для 404, чтобы браузер не ругался на CORS
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Participant-Id, Accept, Origin")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Authorization")
+
 		log.Printf("404: Маршрут не найден: %s %s", r.Method, r.URL.Path)
 		http.Error(w, "Маршрут не найден: "+r.Method+" "+r.URL.Path, http.StatusNotFound)
 	})

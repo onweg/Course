@@ -291,6 +291,45 @@ async function loadTrainersForFilter() {
     }
 }
 
+async function updateTrainingStatus(trainingId, selectEl) {
+    const newStatus = selectEl?.value ?? '';
+    const prevStatus = selectEl?.getAttribute('data-prev-status') || newStatus;
+
+    if (!['scheduled', 'completed', 'cancelled'].includes(newStatus)) {
+        alert('Недопустимый статус');
+        return;
+    }
+    try {
+        const resp = await fetch(`${API_URL}/trainings/${trainingId}/status`, {
+            method: 'PUT',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authToken
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        if (!resp.ok) {
+            const error = await resp.text();
+            if (selectEl) selectEl.value = prevStatus;
+            alert('Ошибка: ' + error);
+            return;
+        }
+        if (selectEl) selectEl.setAttribute('data-prev-status', newStatus);
+        // обновляем списки
+        if (document.getElementById('trainings-tab')?.classList.contains('active')) {
+            loadTrainings();
+        }
+        if (document.getElementById('my-trainings-tab')?.classList.contains('active')) {
+            loadMyTrainings();
+        }
+    } catch (error) {
+        console.error('Ошибка обновления статуса:', error);
+        if (selectEl) selectEl.value = prevStatus;
+        alert('Ошибка обновления статуса: ' + error.message);
+    }
+}
+
 // Загрузка тренировок
 async function loadTrainings() {
     try {
@@ -361,6 +400,8 @@ function displayTrainings(trainings, containerId) {
                           !isTrainer && // Нельзя записаться на свою тренировку как тренер
                           (currentUser.role === 'admin' || currentUser.role === 'trainer' || currentUser.role === 'user'); // Для user проверка абонемента на backend
 
+        const canChangeStatus = currentUser.role === 'admin' || isTrainer;
+
         // Определяем роль пользователя в тренировке
         let userRole = '';
         if (isTrainer) {
@@ -388,6 +429,16 @@ function displayTrainings(trainings, containerId) {
                         ''
                     }
                     ${training.description ? `<p>${training.description}</p>` : ''}
+                    ${canChangeStatus ? `
+                        <div style="margin-top: 10px;">
+                            <label style="font-weight:600;font-size:13px;">Статус:</label>
+                            <select data-prev-status="${training.status}" onchange="updateTrainingStatus(${training.id}, this)" value="${training.status}">
+                                <option value="scheduled" ${training.status === 'scheduled' ? 'selected' : ''}>Запланировано</option>
+                                <option value="completed" ${training.status === 'completed' ? 'selected' : ''}>Завершено</option>
+                                <option value="cancelled" ${training.status === 'cancelled' ? 'selected' : ''}>Отменено</option>
+                            </select>
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="training-actions">
                     ${canRegister ? 
@@ -602,6 +653,15 @@ function closeTrainingModal() {
 async function openTrainingModal() {
     const modal = document.getElementById('training-modal');
     modal.classList.add('active');
+    
+    // Сбрасываем значения по умолчанию
+    const form = document.getElementById('training-form');
+    if (form) form.reset();
+    const typeSelect = document.getElementById('training-type');
+    if (typeSelect) {
+        typeSelect.value = 'personal'; // всегда персональная по умолчанию
+        toggleMaxParticipants();
+    }
     
     // Загружаем список тренеров
     await loadTrainersForSelect();
@@ -903,31 +963,25 @@ async function deleteSubscription(id) {
 
 // Модальное окно создания абонемента
 async function showSubscriptionModal() {
-    // Загружаем клиентов для выбора
-    let clients = [];
+    // Загружаем пользователей с ролью "user"
+    let users = [];
     try {
-        const response = await fetch(`${API_URL}/clients`, {
+        const response = await fetch(`${API_URL}/users`, {
             headers: { 'Authorization': authToken }
         });
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Ошибка загрузки клиентов:', response.status, errorText);
-            throw new Error(`Ошибка загрузки клиентов: ${response.status}`);
+            console.error('Ошибка загрузки пользователей:', response.status, errorText);
+            throw new Error(`Ошибка загрузки пользователей: ${response.status}`);
         }
         const data = await response.json();
-        // Проверяем, что получили массив
-        if (data === null || data === undefined) {
-            console.warn('Получен null/undefined вместо массива, используем пустой массив');
-            clients = [];
-        } else if (Array.isArray(data)) {
-            clients = data;
+        if (Array.isArray(data)) {
+            users = data.filter(u => u.role === 'user');
         } else {
-            console.error('Ожидался массив клиентов, получено:', typeof data, data);
-            clients = [];
+            console.error('Ожидался массив пользователей, получено:', typeof data, data);
         }
     } catch (error) {
-        console.error('Ошибка загрузки клиентов:', error);
-        clients = [];
+        console.error('Ошибка загрузки пользователей:', error);
     }
     
     const modal = document.createElement('div');
@@ -970,16 +1024,17 @@ async function showSubscriptionModal() {
     
     // Заполняем список пользователей
     const userSelect = document.getElementById('sub-user-id');
-    users.forEach(user => {
-        const option = document.createElement('option');
-        option.value = user.id;
-        option.textContent = `${user.name} (${user.email})`;
-        userSelect.appendChild(option);
-    });
-    
     if (users.length === 0) {
-        userSelect.innerHTML = '<option value="">Нет доступных пользователей</option>';
+        userSelect.innerHTML = '<option value=\"\">Нет доступных пользователей</option>';
         userSelect.disabled = true;
+    } else {
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.name} (${user.email})`;
+            userSelect.appendChild(option);
+        });
+        userSelect.disabled = false;
     }
     
     // Устанавливаем сегодняшнюю дату по умолчанию
