@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Фитнес Клуб - Система управления</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Страница логина -->
+    <div id="login-page" class="page active">
+        <div class="login-container">
+            <div class="login-card">
+                <h1>🏋️ Фитнес Клуб</h1>
+                <h2>Вход в систему</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="login-email" placeholder="admin@fitness.club" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Пароль</label>
+                        <input type="password" id="login-password" placeholder="admin" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Войти</button>
+                    <div class="login-hint">
+                        <p><strong>Администратор:</strong> admin@fitness.club / admin</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основное приложение -->
+    <div id="app-page" class="page">
+        <header class="header">
+            <div class="header-content">
+                <h1>🏋️ Фитнес Клуб</h1>
+                <div class="user-info">
+                    <span id="user-name"></span>
+                    <span id="user-role" class="badge"></span>
+                    <button id="logout-btn" class="btn btn-secondary">Выйти</button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="showTab('trainings')" data-tab="trainings">Тренировки</button>
+            <button class="tab-btn" onclick="showTab('my-trainings')" data-tab="my-trainings">Мои тренировки</button>
+            <button class="tab-btn" onclick="showTab('users')" data-tab="users" data-role="admin">Пользователи</button>
+            <button class="tab-btn" onclick="showTab('clients')" data-tab="clients" data-role="admin">Клиенты</button>
+            <button class="tab-btn" onclick="showTab('subscriptions')" data-tab="subscriptions" data-role="admin">Абонементы</button>
+            <button class="tab-btn" onclick="showTab('employees')" data-tab="employees" data-role="admin">Сотрудники</button>
+        </nav>
+
+        <main class="main-content">
+            <!-- Вкладка Тренировки -->
+            <div id="trainings-tab" class="tab-content active">
+                <div class="page-header">
+                    <h2>Расписание тренировок</h2>
+                    <button id="create-training-btn" class="btn btn-primary" data-role="trainer,admin" style="display: none;">
+                        + Создать тренировку
+                    </button>
+                </div>
+
+                <div class="filters">
+                    <select id="filter-hall" onchange="loadTrainings()">
+                        <option value="">Все залы</option>
+                        <option value="pilates">Пилатес</option>
+                        <option value="yoga">Йога</option>
+                        <option value="gym">Тренажерный зал</option>
+                        <option value="dance">Танцевальный зал</option>
+                        <option value="cardio">Кардио зал</option>
+                    </select>
+                    <select id="filter-status" onchange="loadTrainings()">
+                        <option value="">Все статусы</option>
+                        <option value="scheduled">Запланировано</option>
+                        <option value="completed">Завершено</option>
+                        <option value="cancelled">Отменено</option>
+                    </select>
+                    <select id="filter-trainer" onchange="loadTrainings()">
+                        <option value="">Все тренеры</option>
+                    </select>
+                </div>
+
+                <div id="trainings-list" class="trainings-grid"></div>
+            </div>
+
+            <!-- Вкладка Мои тренировки -->
+            <div id="my-trainings-tab" class="tab-content">
+                <h2>Мои тренировки</h2>
+                <div id="my-trainings-list" class="trainings-grid"></div>
+            </div>
+
+            <!-- Вкладка Пользователи (только админ) -->
+            <div id="users-tab" class="tab-content">
+                <div class="page-header">
+                    <h2>Пользователи</h2>
+                    <button class="btn btn-primary" onclick="showUserModal(null)">+ Добавить пользователя</button>
+                </div>
+                <div id="users-list"></div>
+            </div>
+
+            <!-- Вкладка Клиенты (только админ) -->
+            <div id="clients-tab" class="tab-content">
+                <div class="page-header">
+                    <h2>Клиенты</h2>
+                    <button class="btn btn-primary" onclick="showClientModal()">+ Добавить клиента</button>
+                </div>
+                <div id="clients-list"></div>
+            </div>
+
+            <!-- Вкладка Абонементы (только админ) -->
+            <div id="subscriptions-tab" class="tab-content">
+                <div class="page-header">
+                    <h2>Абонементы</h2>
+                    <button class="btn btn-primary" onclick="showSubscriptionModal()">+ Добавить абонемент</button>
+                </div>
+                <div id="subscriptions-list"></div>
+            </div>
+
+            <!-- Вкладка Сотрудники (только админ) -->
+            <div id="employees-tab" class="tab-content">
+                <div class="page-header">
+                    <h2>Сотрудники</h2>
+                    <button class="btn btn-primary" onclick="showEmployeeModal()">+ Добавить сотрудника</button>
+                </div>
+                <div id="employees-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Модальное окно создания тренировки -->
+    <div id="training-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeTrainingModal()">&times;</span>
+            <h2>Создать тренировку</h2>
+            <form id="training-form">
+                <div class="form-group">
+                    <label>Название</label>
+                    <input type="text" id="training-title" required>
+                </div>
+                <div class="form-group">
+                    <label>Описание</label>
+                    <textarea id="training-description" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Тип</label>
+                        <select id="training-type" required>
+                            <option value="personal">Персональная</option>
+                            <option value="group">Групповая</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Зал</label>
+                        <select id="training-hall" required>
+                            <option value="pilates">Пилатес</option>
+                            <option value="yoga">Йога</option>
+                            <option value="gym">Тренажерный зал</option>
+                            <option value="dance">Танцевальный зал</option>
+                            <option value="cardio">Кардио зал</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Дата и время</label>
+                        <input type="datetime-local" id="training-start" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Длительность (минуты)</label>
+                        <input type="number" id="training-duration" value="60" min="15" step="15" required>
+                    </div>
+                </div>
+                <div class="form-group" id="max-participants-group" style="display: none;">
+                    <label>Максимум участников</label>
+                    <input type="number" id="training-max" min="2" value="10">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Тренер</label>
+                        <select id="training-trainer" required>
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Участник (для персональной тренировки)</label>
+                        <select id="training-participant">
+                            <option value="">Не выбран</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTrainingModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
