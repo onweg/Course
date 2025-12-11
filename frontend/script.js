@@ -74,6 +74,35 @@ function showLogin() {
     }
 }
 
+// Активировать вкладку по имени и загрузить данные
+function setActiveTab(tabName) {
+    // Сброс активных классов
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+    const tabContent = document.getElementById(`${tabName}-tab`);
+    const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+
+    if (tabContent) tabContent.classList.add('active');
+    if (tabBtn) tabBtn.classList.add('active');
+
+    // Загружаем данные для выбранной вкладки
+    if (tabName === 'trainings') {
+        loadTrainersForFilter();
+        loadTrainings();
+    } else if (tabName === 'my-trainings') {
+        loadMyTrainings();
+    } else if (tabName === 'users') {
+        loadUsers();
+    } else if (tabName === 'clients') {
+        loadClients();
+    } else if (tabName === 'subscriptions') {
+        loadSubscriptions();
+    } else if (tabName === 'employees') {
+        loadEmployees();
+    }
+}
+
 // Показать приложение
 function showApp() {
     console.log('showApp вызвана, currentUser:', currentUser);
@@ -122,12 +151,8 @@ function showApp() {
         // Показываем/скрываем вкладки в зависимости от роли
         updateTabsVisibility();
         
-        // Загружаем данные
-        const trainingsTab = document.getElementById('trainings-tab');
-        if (trainingsTab && trainingsTab.classList.contains('active')) {
-            loadTrainersForFilter();
-            loadTrainings();
-        }
+        // Всегда активируем первую вкладку (тренировки)
+        setActiveTab('trainings');
         
         console.log('showApp завершена успешно');
     } catch (error) {
@@ -238,33 +263,9 @@ function handleLogout() {
     showLogin();
 }
 
-// Переключение вкладок
+// Переключение вкладок (обертка для кликов)
 function showTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-    event.target.classList.add('active');
-
-    // Загружаем данные
-    if (tabName === 'trainings') {
-        loadTrainersForFilter();
-        loadTrainings();
-    } else if (tabName === 'my-trainings') {
-        loadMyTrainings();
-    } else if (tabName === 'users') {
-        loadUsers();
-    } else if (tabName === 'clients') {
-        loadClients();
-    } else if (tabName === 'subscriptions') {
-        loadSubscriptions();
-    } else if (tabName === 'employees') {
-        loadEmployees();
-    }
+    setActiveTab(tabName);
 }
 
 // Загрузка тренеров для фильтра
