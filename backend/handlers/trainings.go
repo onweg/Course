@@ -654,33 +654,36 @@ func UpdateTrainingStatus(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Получаем пользователя из токена и проверяем права
+    // Получаем пользователя из токена и проверяем права (любой тренер или админ)
     token := r.Header.Get("Authorization")
     var userRole string
-    var userID int
-    var trainingTrainerID int
     err = database.DB.QueryRow(`
-        SELECT u.role, u.id, t.trainer_id
+        SELECT u.role
         FROM sessions s
         JOIN users u ON s.user_id = u.id
-        JOIN trainings t ON t.id = $1
-        WHERE s.token = $2 AND s.expires_at > NOW()
-    `, id, token).Scan(&userRole, &userID, &trainingTrainerID)
+        WHERE s.token = $1 AND s.expires_at > NOW()
+    `, token).Scan(&userRole)
 
     if err != nil {
         http.Error(w, "Недействительный токен", http.StatusUnauthorized)
         return
     }
 
-    if userRole != "admin" && userID != trainingTrainerID {
-        http.Error(w, "Доступ запрещен", http.StatusForbidden)
+    if userRole != "admin" && userRole != "trainer" {
+        http.Error(w, "Доступ запрещен. Требуются права тренера или администратора", http.StatusForbidden)
         return
     }
 
-    _, err = database.DB.Exec(`UPDATE trainings SET status = $1 WHERE id = $2`, req.Status, id)
+    result, err := database.DB.Exec(`UPDATE trainings SET status = $1 WHERE id = $2`, req.Status, id)
     if err != nil {
         log.Printf("Ошибка обновления статуса: %v", err)
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    rows, _ := result.RowsAffected()
+    if rows == 0 {
+        http.Error(w, "Тренировка не найдена", http.StatusNotFound)
         return
     }
 

@@ -299,6 +299,21 @@ async function updateTrainingStatus(trainingId, selectEl) {
         alert('Недопустимый статус');
         return;
     }
+
+    // Мини-UI: блокируем select и показываем подсказку
+    let hint;
+    if (selectEl) {
+        selectEl.disabled = true;
+        hint = selectEl.nextElementSibling;
+        if (!hint || !hint.classList?.contains('status-hint')) {
+            hint = document.createElement('span');
+            hint.className = 'status-hint';
+            selectEl.after(hint);
+        }
+        hint.textContent = 'Сохраняем...';
+        hint.classList.remove('error', 'success');
+    }
+
     try {
         const resp = await fetch(`${API_URL}/trainings/${trainingId}/status`, {
             method: 'PUT',
@@ -312,10 +327,18 @@ async function updateTrainingStatus(trainingId, selectEl) {
         if (!resp.ok) {
             const error = await resp.text();
             if (selectEl) selectEl.value = prevStatus;
-            alert('Ошибка: ' + error);
+            if (hint) {
+                hint.textContent = error || 'Ошибка сохранения';
+                hint.classList.add('error');
+            }
             return;
         }
         if (selectEl) selectEl.setAttribute('data-prev-status', newStatus);
+        if (hint) {
+            hint.textContent = 'Обновлено';
+            hint.classList.add('success');
+            setTimeout(() => hint.remove(), 1500);
+        }
         // обновляем списки
         if (document.getElementById('trainings-tab')?.classList.contains('active')) {
             loadTrainings();
@@ -326,7 +349,12 @@ async function updateTrainingStatus(trainingId, selectEl) {
     } catch (error) {
         console.error('Ошибка обновления статуса:', error);
         if (selectEl) selectEl.value = prevStatus;
-        alert('Ошибка обновления статуса: ' + error.message);
+        if (hint) {
+            hint.textContent = error.message || 'Ошибка';
+            hint.classList.add('error');
+        }
+    } finally {
+        if (selectEl) selectEl.disabled = false;
     }
 }
 
@@ -400,7 +428,7 @@ function displayTrainings(trainings, containerId) {
                           !isTrainer && // Нельзя записаться на свою тренировку как тренер
                           (currentUser.role === 'admin' || currentUser.role === 'trainer' || currentUser.role === 'user'); // Для user проверка абонемента на backend
 
-        const canChangeStatus = currentUser.role === 'admin' || isTrainer;
+        const canChangeStatus = currentUser.role === 'admin' || currentUser.role === 'trainer';
 
         // Определяем роль пользователя в тренировке
         let userRole = '';
@@ -430,13 +458,15 @@ function displayTrainings(trainings, containerId) {
                     }
                     ${training.description ? `<p>${training.description}</p>` : ''}
                     ${canChangeStatus ? `
-                        <div style="margin-top: 10px;">
-                            <label style="font-weight:600;font-size:13px;">Статус:</label>
-                            <select data-prev-status="${training.status}" onchange="updateTrainingStatus(${training.id}, this)" value="${training.status}">
-                                <option value="scheduled" ${training.status === 'scheduled' ? 'selected' : ''}>Запланировано</option>
-                                <option value="completed" ${training.status === 'completed' ? 'selected' : ''}>Завершено</option>
-                                <option value="cancelled" ${training.status === 'cancelled' ? 'selected' : ''}>Отменено</option>
-                            </select>
+                        <div class="status-control">
+                            <div class="status-label">Статус тренировки</div>
+                            <div class="status-row">
+                                <select class="status-select" data-prev-status="${training.status}" onchange="updateTrainingStatus(${training.id}, this)" value="${training.status}">
+                                    <option value="scheduled" ${training.status === 'scheduled' ? 'selected' : ''}>Запланировано</option>
+                                    <option value="completed" ${training.status === 'completed' ? 'selected' : ''}>Завершено</option>
+                                    <option value="cancelled" ${training.status === 'cancelled' ? 'selected' : ''}>Отменено</option>
+                                </select>
+                            </div>
                         </div>
                     ` : ''}
                 </div>
