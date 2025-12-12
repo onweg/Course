@@ -47,10 +47,8 @@ func main() {
 	api.Handle("/users/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteUser))).Methods("DELETE")
 
 	// API маршруты для тренировок
-	// Важно: более специфичные маршруты должны быть объявлены раньше
 	api.HandleFunc("/trainings/{id}/register", handlers.RegisterForTraining).Methods("POST")
 	api.HandleFunc("/trainings/{id}/cancel", handlers.CancelRegistration).Methods("POST")
-	// Статус меняем внутри API subrouter, чтобы путь корректно матчился и не уходил в 404/CORS
 	api.Handle("/trainings/{id:[0-9]+}/status", middleware.TrainerOrAdmin(http.HandlerFunc(handlers.UpdateTrainingStatus))).Methods("PUT")
 	api.HandleFunc("/trainings", handlers.GetTrainings).Methods("GET")
 	api.Handle("/trainings", middleware.TrainerOrAdmin(http.HandlerFunc(handlers.CreateTraining))).Methods("POST")
