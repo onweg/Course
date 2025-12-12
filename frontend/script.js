@@ -100,6 +100,8 @@ function setActiveTab(tabName) {
         loadSubscriptions();
     } else if (tabName === 'employees') {
         loadEmployees();
+    } else if (tabName === 'about') {
+        // Страница "Об авторе" не требует загрузки данных
     }
 }
 
@@ -833,6 +835,7 @@ async function loadUsers() {
                     </div>
                     ${currentUser && currentUser.role === 'admin' ? `
                     <div style="display: flex; gap: 10px;">
+                      <button class="btn btn-secondary btn-small" onclick="showUserModal(${u.id})">Редактировать</button>
                       <button class="btn btn-danger btn-small" onclick="deleteUser(${u.id})">Удалить</button>
                     </div>
                     ` : ''}
@@ -1164,13 +1167,28 @@ async function loadEmployees() {
 }
 
 // Модальное окно для создания/редактирования пользователя
-function showUserModal(userId) {
+async function showUserModal(userId) {
     console.log('showUserModal вызвана с userId:', userId);
     
     // Удаляем существующее модальное окно, если есть
     const existingModal = document.getElementById('user-modal');
     if (existingModal) {
         existingModal.remove();
+    }
+    
+    let userData = null;
+    if (userId) {
+        // Загружаем данные пользователя для редактирования
+        try {
+            const resp = await fetch(`${API_URL}/users/${userId}`, {
+                headers: { 'Authorization': authToken }
+            });
+            if (resp.ok) {
+                userData = await resp.json();
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки пользователя:', error);
+        }
     }
     
     // Создаем новое модальное окно
@@ -1193,13 +1211,13 @@ function showUserModal(userId) {
                     <div class='form-group'>
                         <label>Пароль</label>
                         <input id='um-password' type='password' placeholder="${userId ? 'Оставьте пустым, чтобы не менять' : 'Оставьте пустым для автогенерации'}" autocomplete="new-password">
-                        <small style="color: #666; font-size: 12px;">${userId ? '' : 'Если не указан, будет сгенерирован случайный пароль'}</small>
+                        <small style="color: #666; font-size: 12px;">${userId ? 'Оставьте пустым, чтобы не менять пароль' : 'Если не указан, будет сгенерирован случайный пароль'}</small>
                     </div>
                     <div class='form-group'>
                         <label>Роль</label>
                         <select id='um-role' required>
-                            <option value='user'>Пользователь (автоматически создастся клиент)</option>
-                            <option value='trainer'>Тренер (автоматически создастся сотрудник)</option>
+                            <option value='user'>Пользователь</option>
+                            <option value='trainer'>Тренер</option>
                             <option value='admin'>Администратор</option>
                         </select>
                     </div>
@@ -1212,6 +1230,13 @@ function showUserModal(userId) {
     
     document.body.appendChild(modal);
     
+    // Заполняем форму данными пользователя, если редактируем
+    if (userData) {
+        document.getElementById('um-name').value = userData.name || '';
+        document.getElementById('um-email').value = userData.email || '';
+        document.getElementById('um-role').value = userData.role || 'user';
+    }
+    
     // Обработчик отправки формы
     document.getElementById('user-form-modal').onsubmit = async function(e) {
         e.preventDefault();
@@ -1222,17 +1247,18 @@ function showUserModal(userId) {
             role: document.getElementById('um-role').value
         };
         
-        // Пароль опциональный - если не указан, сервер сгенерирует случайный
+        // Пароль опциональный
         const password = document.getElementById('um-password').value.trim();
         if (password) {
             data.password = password;
         }
         
-        console.log('Создание пользователя:', { ...data, password: password ? '***' : '(автогенерация)' });
-        
         try {
-            const resp = await fetch(`${API_URL}/users`, {
-                method: 'POST',
+            const url = userId ? `${API_URL}/users/${userId}` : `${API_URL}/users`;
+            const method = userId ? 'PUT' : 'POST';
+            
+            const resp = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': authToken
@@ -1246,20 +1272,8 @@ function showUserModal(userId) {
                 return;
             }
             
-            const createdUser = await resp.json();
-            let message = 'Пользователь успешно создан!';
-            
-            // Информируем о создании связанных записей
-            if (data.role === 'user') {
-                message += '\nАвтоматически создан клиент.';
-            } else if (data.role === 'trainer') {
-                message += '\nАвтоматически создан сотрудник.';
-            }
-            
-            if (!password) {
-                message += '\n\nВНИМАНИЕ: Пароль был сгенерирован автоматически.';
-                message += '\nПопросите пользователя использовать функцию восстановления пароля или установите пароль вручную.';
-            }
+            const result = await resp.json();
+            alert(userId ? 'Пользователь успешно обновлен!' : 'Пользователь успешно создан!');
             
             closeUserModal();
             loadUsers();
@@ -1271,10 +1285,8 @@ function showUserModal(userId) {
             } else if (activeTab && activeTab.id === 'employees-tab') {
                 loadEmployees();
             }
-            
-            alert(message);
         } catch (error) {
-            console.error('Ошибка создания пользователя:', error);
+            console.error('Ошибка:', error);
             alert('Ошибка: ' + error.message);
         }
     };

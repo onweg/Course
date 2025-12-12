@@ -166,3 +166,82 @@ func DeleteEmployee(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Удален сотрудник с ID: %d", id)
 }
 
+// UpdateEmployee обновляет данные сотрудника
+func UpdateEmployee(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("PUT /api/employees/%d - обновление сотрудника", id)
+
+	var e models.Employee
+	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем существование сотрудника
+	var exists bool
+	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM employees WHERE id = $1)", id).Scan(&exists)
+	if err != nil {
+		log.Printf("Ошибка проверки сотрудника: %v", err)
+		http.Error(w, "Ошибка проверки сотрудника", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Сотрудник не найден", http.StatusNotFound)
+		return
+	}
+
+	// Обновляем поля
+	var salary interface{}
+	if e.Salary != nil {
+		salary = *e.Salary
+	}
+
+	_, err = database.DB.Exec(`
+		UPDATE employees 
+		SET position = $1, salary = $2, hire_date = $3
+		WHERE id = $4
+	`, e.Position, salary, e.HireDate, id)
+
+	if err != nil {
+		log.Printf("Ошибка обновления: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем обновленного сотрудника
+	var updatedEmployee models.Employee
+	var u models.User
+	var salaryNull sql.NullFloat64
+
+	err = database.DB.QueryRow(`
+		SELECT e.id, e.user_id, e.position, e.salary, e.hire_date, e.created_at,
+		       u.id, u.name, u.email, u.role
+		FROM employees e
+		LEFT JOIN users u ON e.user_id = u.id
+		WHERE e.id = $1
+	`, id).Scan(&updatedEmployee.ID, &updatedEmployee.UserID, &updatedEmployee.Position,
+		&salaryNull, &updatedEmployee.HireDate, &updatedEmployee.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.Role)
+
+	if err != nil {
+		log.Printf("Ошибка получения обновленного сотрудника: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if salaryNull.Valid {
+		updatedEmployee.Salary = &salaryNull.Float64
+	}
+	updatedEmployee.User = &u
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedEmployee)
+	log.Printf("Обновлен сотрудник с ID: %d", id)
+}
+

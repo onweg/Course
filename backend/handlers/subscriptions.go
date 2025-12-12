@@ -276,3 +276,74 @@ func DeleteSubscription(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Удален абонемент с ID: %d", id)
 }
 
+// UpdateSubscription обновляет данные абонемента
+func UpdateSubscription(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("PUT /api/subscriptions/%d - обновление абонемента", id)
+
+	var s models.Subscription
+	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем существование абонемента
+	var exists bool
+	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM subscriptions WHERE id = $1)", id).Scan(&exists)
+	if err != nil {
+		log.Printf("Ошибка проверки абонемента: %v", err)
+		http.Error(w, "Ошибка проверки абонемента", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Абонемент не найден", http.StatusNotFound)
+		return
+	}
+
+	// Обновляем поля
+	_, err = database.DB.Exec(`
+		UPDATE subscriptions 
+		SET type = $1, start_date = $2, end_date = $3, price = $4, status = $5
+		WHERE id = $6
+	`, s.Type, s.StartDate, s.EndDate, s.Price, s.Status, id)
+
+	if err != nil {
+		log.Printf("Ошибка обновления: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем обновленный абонемент
+	var updatedSubscription models.Subscription
+	var c models.Client
+
+	err = database.DB.QueryRow(`
+		SELECT s.id, s.client_id, s.type, s.start_date, s.end_date, s.price, s.status, s.created_at,
+		       c.id, c.user_id, c.phone, c.address
+		FROM subscriptions s
+		LEFT JOIN clients c ON s.client_id = c.id
+		WHERE s.id = $1
+	`, id).Scan(&updatedSubscription.ID, &updatedSubscription.ClientID, &updatedSubscription.Type,
+		&updatedSubscription.StartDate, &updatedSubscription.EndDate, &updatedSubscription.Price,
+		&updatedSubscription.Status, &updatedSubscription.CreatedAt,
+		&c.ID, &c.UserID, &c.Phone, &c.Address)
+
+	if err != nil {
+		log.Printf("Ошибка получения обновленного абонемента: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	updatedSubscription.Client = &c
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedSubscription)
+	log.Printf("Обновлен абонемент с ID: %d", id)
+}
+

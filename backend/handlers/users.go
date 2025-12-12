@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"fitness-club/models"
 	"fitness-club/database"
 	"log"
@@ -198,6 +199,116 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 	log.Printf("Удален пользователь с ID: %d", id)
+}
+
+// UpdateUser обновляет данные пользователя
+func UpdateUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("PUT /api/users/%d - обновление пользователя", id)
+
+	var u models.User
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем существование пользователя
+	var exists bool
+	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", id).Scan(&exists)
+	if err != nil {
+		log.Printf("Ошибка проверки пользователя: %v", err)
+		http.Error(w, "Ошибка проверки пользователя", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	// Если email изменен, проверяем уникальность
+	if u.Email != "" {
+		var existingID int
+		err = database.DB.QueryRow("SELECT id FROM users WHERE email = $1 AND id != $2", u.Email, id).Scan(&existingID)
+		if err == nil {
+			http.Error(w, "Пользователь с таким email уже существует", http.StatusConflict)
+			return
+		} else if err != sql.ErrNoRows {
+			log.Printf("Ошибка проверки email: %v", err)
+			http.Error(w, "Ошибка проверки email", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Обновляем только переданные поля
+	updateFields := []string{}
+	args := []interface{}{}
+	argNum := 1
+
+	if u.Name != "" {
+		updateFields = append(updateFields, fmt.Sprintf("name = $%d", argNum))
+		args = append(args, u.Name)
+		argNum++
+	}
+	if u.Email != "" {
+		updateFields = append(updateFields, fmt.Sprintf("email = $%d", argNum))
+		args = append(args, u.Email)
+		argNum++
+	}
+	if u.Password != "" {
+		updateFields = append(updateFields, fmt.Sprintf("password = $%d", argNum))
+		args = append(args, u.Password)
+		argNum++
+	}
+	if u.Role != "" {
+		updateFields = append(updateFields, fmt.Sprintf("role = $%d", argNum))
+		args = append(args, u.Role)
+		argNum++
+	}
+
+	if len(updateFields) == 0 {
+		http.Error(w, "Нет полей для обновления", http.StatusBadRequest)
+		return
+	}
+
+	args = append(args, id)
+	query := fmt.Sprintf("UPDATE users SET %s WHERE id = $%d", strings.Join(updateFields, ", "), argNum)
+
+	result, err := database.DB.Exec(query, args...)
+	if err != nil {
+		log.Printf("Ошибка обновления: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	// Возвращаем обновленного пользователя
+	var updatedUser models.User
+	err = database.DB.QueryRow(`
+		SELECT id, name, email, role, created_at 
+		FROM users 
+		WHERE id = $1
+	`, id).Scan(&updatedUser.ID, &updatedUser.Name, &updatedUser.Email, &updatedUser.Role, &updatedUser.CreatedAt)
+
+	if err != nil {
+		log.Printf("Ошибка получения обновленного пользователя: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedUser)
+	log.Printf("Обновлен пользователь с ID: %d", id)
 }
 
 // generateRandomPassword генерирует случайный пароль

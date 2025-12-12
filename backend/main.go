@@ -44,6 +44,7 @@ func main() {
 	api.HandleFunc("/users", handlers.GetUsers).Methods("GET")
 	api.HandleFunc("/users", handlers.CreateUser).Methods("POST")
 	api.HandleFunc("/users/{id}", handlers.GetUser).Methods("GET")
+	api.Handle("/users/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.UpdateUser))).Methods("PUT")
 	api.Handle("/users/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteUser))).Methods("DELETE")
 
 	// API маршруты для тренировок
@@ -60,18 +61,21 @@ func main() {
 	api.HandleFunc("/clients", handlers.GetClients).Methods("GET")
 	api.HandleFunc("/clients", handlers.CreateClient).Methods("POST")
 	api.HandleFunc("/clients/{id}", handlers.GetClient).Methods("GET")
+	api.Handle("/clients/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.UpdateClient))).Methods("PUT")
 	api.Handle("/clients/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteClient))).Methods("DELETE")
 
 	// API маршруты для абонементов
 	api.HandleFunc("/subscriptions", handlers.GetSubscriptions).Methods("GET")
 	api.HandleFunc("/subscriptions", handlers.CreateSubscription).Methods("POST")
 	api.HandleFunc("/subscriptions/{id}", handlers.GetSubscription).Methods("GET")
+	api.Handle("/subscriptions/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.UpdateSubscription))).Methods("PUT")
 	api.Handle("/subscriptions/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteSubscription))).Methods("DELETE")
 
 	// API маршруты для сотрудников
 	api.HandleFunc("/employees", handlers.GetEmployees).Methods("GET")
 	api.HandleFunc("/employees", handlers.CreateEmployee).Methods("POST")
 	api.HandleFunc("/employees/{id}", handlers.GetEmployee).Methods("GET")
+	api.Handle("/employees/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.UpdateEmployee))).Methods("PUT")
 	api.Handle("/employees/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteEmployee))).Methods("DELETE")
 
 	// Обработчик для несуществующих маршрутов (для отладки)

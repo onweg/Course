@@ -229,3 +229,89 @@ func DeleteClient(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Удален клиент с ID: %d", id)
 }
 
+// UpdateClient обновляет данные клиента
+func UpdateClient(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("PUT /api/clients/%d - обновление клиента", id)
+
+	var c models.Client
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем существование клиента
+	var exists bool
+	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)", id).Scan(&exists)
+	if err != nil {
+		log.Printf("Ошибка проверки клиента: %v", err)
+		http.Error(w, "Ошибка проверки клиента", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Клиент не найден", http.StatusNotFound)
+		return
+	}
+
+	// Обновляем поля
+	var birthDate interface{}
+	if c.BirthDate != nil {
+		birthDate = *c.BirthDate
+	}
+
+	_, err = database.DB.Exec(`
+		UPDATE clients 
+		SET phone = $1, address = $2, birth_date = $3
+		WHERE id = $4
+	`, c.Phone, c.Address, birthDate, id)
+
+	if err != nil {
+		log.Printf("Ошибка обновления: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем обновленного клиента
+	var updatedClient models.Client
+	var u models.User
+	var birthDateNull sql.NullTime
+	var phone sql.NullString
+	var address sql.NullString
+
+	err = database.DB.QueryRow(`
+		SELECT c.id, c.user_id, c.phone, c.address, c.birth_date, c.created_at,
+		       u.id, u.name, u.email, u.role
+		FROM clients c
+		LEFT JOIN users u ON c.user_id = u.id
+		WHERE c.id = $1
+	`, id).Scan(&updatedClient.ID, &updatedClient.UserID, &phone, &address, &birthDateNull, &updatedClient.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.Role)
+
+	if err != nil {
+		log.Printf("Ошибка получения обновленного клиента: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if phone.Valid {
+		updatedClient.Phone = phone.String
+	}
+	if address.Valid {
+		updatedClient.Address = address.String
+	}
+	if birthDateNull.Valid {
+		updatedClient.BirthDate = &birthDateNull.Time
+	}
+	updatedClient.User = &u
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedClient)
+	log.Printf("Обновлен клиент с ID: %d", id)
+}
+

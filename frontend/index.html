@@ -51,6 +51,7 @@
             <button class="tab-btn" onclick="showTab('clients')" data-tab="clients" data-role="admin">Клиенты</button>
             <button class="tab-btn" onclick="showTab('subscriptions')" data-tab="subscriptions" data-role="admin">Абонементы</button>
             <button class="tab-btn" onclick="showTab('employees')" data-tab="employees" data-role="admin">Сотрудники</button>
+            <button class="tab-btn" onclick="showTab('about')" data-tab="about">Об авторе</button>
         </nav>
 
         <main class="main-content">
@@ -124,6 +125,46 @@
                     <h2>Сотрудники</h2>
                 </div>
                 <div id="employees-list"></div>
+            </div>
+
+            <!-- Вкладка Об авторе -->
+            <div id="about-tab" class="tab-content">
+                <div class="about-page">
+                    <h2>Об авторе</h2>
+                    <div class="about-content">
+                        <div class="about-section">
+                            <h3>ФИО автора</h3>
+                            <p>Фролкин Аркадий Дмитриевич</p>
+                        </div>
+                        <div class="about-section">
+                            <h3>Группа / Учебное заведение</h3>
+                            <p>ИД23-3 Финуниверситет</p>
+                        </div>
+                        <div class="about-section">
+                            <h3>Контактные данные</h3>
+                            <p>Email: 240193@edu.fa.ru</p>
+                            <p>Телефон: 89104702614</p>
+                        </div>
+                        <div class="about-section">
+                            <h3>Опыт работы с технологиями</h3>
+                            <p>В данном проекте использованы следующие технологии:</p>
+                            <ul>
+                                <li><strong>Backend:</strong> Go (Golang) с использованием библиотеки Gorilla Mux для маршрутизации</li>
+                                <li><strong>Frontend:</strong> Vanilla JavaScript, HTML5, CSS3</li>
+                                <li><strong>База данных:</strong> PostgreSQL</li>
+                                <li><strong>Архитектура:</strong> RESTful API</li>
+                            </ul>
+                            <p>В процессе разработки были изучены основы работы с Go, создание REST API, работа с базами данных PostgreSQL, 
+                            реализация системы аутентификации и авторизации, разделение ролей пользователей, 
+                            создание современного пользовательского интерфейса.</p>
+                        </div>
+                        <div class="about-section">
+                            <h3>Даты работы над проектом</h3>
+                            <p>Дата начала: 2.12.2025</p>
+                            <p>Дата завершения: 19.12.2025</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

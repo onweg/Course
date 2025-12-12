@@ -510,6 +510,58 @@ body {
     box-shadow: 0 0 0 3px rgba(100,181,246,0.25);
 }
 
+/* Страница Об авторе */
+.about-page {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.about-content {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.about-section {
+    margin-bottom: 30px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid var(--border);
+}
+
+.about-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.about-section h3 {
+    font-size: 20px;
+    color: var(--primary);
+    margin-bottom: 15px;
+}
+
+.about-section p {
+    color: #666;
+    line-height: 1.8;
+    margin-bottom: 10px;
+}
+
+.about-section ul {
+    margin-left: 20px;
+    margin-top: 10px;
+    color: #666;
+    line-height: 1.8;
+}
+
+.about-section li {
+    margin-bottom: 8px;
+}
+
+.about-section strong {
+    color: var(--dark);
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .trainings-grid {
@@ -529,5 +581,9 @@ body {
         flex-direction: column;
         align-items: flex-start;
         gap: 15px;
+    }
+
+    .about-content {
+        padding: 20px;
     }
 }
