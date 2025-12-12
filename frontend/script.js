@@ -3,6 +3,49 @@ const API_URL = 'http://localhost:8080/api';
 let currentUser = null;
 let authToken = null;
 
+// Система уведомлений
+function showNotification(type, title, message, duration = 5000) {
+    const container = document.getElementById('notifications-container');
+    if (!container) return;
+
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div class="notification-icon">${icons[type] || icons.info}</div>
+        <div class="notification-content">
+            <div class="notification-title">${title}</div>
+            <div class="notification-message">${message}</div>
+        </div>
+        <button class="notification-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+
+    container.appendChild(notification);
+
+    // Автоматическое удаление через duration
+    if (duration > 0) {
+        setTimeout(() => {
+            notification.classList.add('hiding');
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 300);
+        }, duration);
+    }
+}
+
+// Обертка для старых alert
+function showAlert(message, type = 'info') {
+    showNotification(type, type === 'error' ? 'Ошибка' : type === 'success' ? 'Успешно' : 'Информация', message);
+}
+
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Инициализация приложения...');
@@ -100,6 +143,11 @@ function setActiveTab(tabName) {
         loadSubscriptions();
     } else if (tabName === 'employees') {
         loadEmployees();
+    } else if (tabName === 'stats') {
+        // Небольшая задержка, чтобы убедиться, что вкладка активна
+        setTimeout(() => {
+            loadStats();
+        }, 100);
     } else if (tabName === 'about') {
         // Страница "Об авторе" не требует загрузки данных
     }
@@ -159,7 +207,7 @@ function showApp() {
         console.log('showApp завершена успешно');
     } catch (error) {
         console.error('Ошибка в showApp:', error);
-        alert('Ошибка переключения страницы: ' + error.message);
+        showNotification('error', 'Ошибка', 'Ошибка переключения страницы: ' + error.message);
     }
 }
 
@@ -209,7 +257,7 @@ async function handleLogin(e) {
         if (!response.ok) {
             const error = await response.text();
             console.error('Ошибка ответа:', error);
-            alert('Ошибка входа: ' + error);
+            showNotification('error', 'Ошибка входа', error);
             return;
         }
 
@@ -218,7 +266,7 @@ async function handleLogin(e) {
         
         if (!data.token || !data.user) {
             console.error('Неполные данные от сервера:', data);
-            alert('Ошибка: неполные данные от сервера');
+            showNotification('error', 'Ошибка', 'Неполные данные от сервера');
             return;
         }
         
@@ -245,7 +293,7 @@ async function handleLogin(e) {
         console.error('Ошибка подключения:', error);
         console.error('Тип ошибки:', error.name);
         console.error('Сообщение:', error.message);
-        alert('Ошибка подключения к серверу: ' + error.message);
+        showNotification('error', 'Ошибка подключения', 'Не удалось подключиться к серверу: ' + error.message);
     }
 }
 
@@ -267,6 +315,15 @@ function handleLogout() {
 
 // Переключение вкладок (обертка для кликов)
 function showTab(tabName) {
+    // Проверяем доступность вкладки для текущего пользователя
+    const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (tabBtn && tabBtn.hasAttribute('data-role')) {
+        const requiredRoles = tabBtn.getAttribute('data-role').split(',');
+        if (currentUser && !requiredRoles.includes(currentUser.role)) {
+            showNotification('warning', 'Доступ запрещен', 'У вас нет доступа к этой вкладке');
+            return;
+        }
+    }
     setActiveTab(tabName);
 }
 
@@ -299,7 +356,7 @@ async function updateTrainingStatus(trainingId, selectEl) {
     const prevStatus = selectEl?.getAttribute('data-prev-status') || newStatus;
 
     if (!['scheduled', 'completed', 'cancelled'].includes(newStatus)) {
-        alert('Недопустимый статус');
+        showNotification('warning', 'Предупреждение', 'Недопустимый статус');
         return;
     }
 
@@ -531,7 +588,7 @@ async function handleCreateTraining(e) {
 
     const startTimeInput = document.getElementById('training-start').value;
     if (!startTimeInput) {
-        alert('Укажите дату и время тренировки');
+        showNotification('warning', 'Предупреждение', 'Укажите дату и время тренировки');
         return;
     }
 
@@ -568,7 +625,7 @@ async function handleCreateTraining(e) {
         if (!response.ok) {
             const error = await response.text();
             console.error('Ошибка создания тренировки:', error);
-            alert('Ошибка создания: ' + error);
+            showNotification('error', 'Ошибка', 'Не удалось создать тренировку: ' + error);
             return;
         }
 
@@ -589,22 +646,22 @@ async function handleCreateTraining(e) {
                 if (!registerResponse.ok) {
                     const errorText = await registerResponse.text();
                     console.warn('Не удалось зарегистрировать участника:', errorText);
-                    alert('Тренировка создана, но не удалось зарегистрировать участника: ' + errorText);
+                    showNotification('warning', 'Предупреждение', 'Тренировка создана, но не удалось зарегистрировать участника: ' + errorText);
                 } else {
                     console.log('Участник успешно зарегистрирован');
                 }
             } catch (regError) {
                 console.error('Ошибка регистрации участника:', regError);
-                alert('Тренировка создана, но произошла ошибка при регистрации участника');
+                showNotification('warning', 'Предупреждение', 'Тренировка создана, но произошла ошибка при регистрации участника');
             }
         }
 
         closeTrainingModal();
         loadTrainings();
-        alert('Тренировка успешно создана!');
+        showNotification('success', 'Успешно', 'Тренировка успешно создана!');
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('Ошибка создания тренировки: ' + error.message);
+        showNotification('error', 'Ошибка', 'Не удалось создать тренировку: ' + error.message);
     }
 }
 
@@ -620,14 +677,14 @@ async function registerForTraining(trainingId) {
 
         if (!response.ok) {
             const error = await response.text();
-            alert('Ошибка: ' + error);
+            showNotification('error', 'Ошибка', error);
             return;
         }
 
         loadTrainings();
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('Ошибка регистрации');
+        showNotification('error', 'Ошибка', 'Не удалось зарегистрироваться на тренировку');
     }
 }
 
@@ -643,14 +700,14 @@ async function cancelRegistration(trainingId) {
 
         if (!response.ok) {
             const error = await response.text();
-            alert('Ошибка: ' + error);
+            showNotification('error', 'Ошибка', error);
             return;
         }
 
         loadTrainings();
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('Ошибка отмены регистрации');
+        showNotification('error', 'Ошибка', 'Не удалось отменить регистрацию');
     }
 }
 
@@ -666,7 +723,7 @@ async function deleteTraining(trainingId) {
 
         if (!response.ok) {
             const error = await response.text();
-            alert('Ошибка: ' + error);
+            showNotification('error', 'Ошибка', error);
             return;
         }
 
@@ -853,14 +910,24 @@ async function loadUsers() {
             list.innerHTML = '<div class="empty-message">Нет пользователей</div>';
         } else {
             filtered.forEach(u => {
+                const roleNames = {
+                    'user': 'Пользователь',
+                    'trainer': 'Тренер',
+                    'admin': 'Администратор'
+                };
                 list.innerHTML += `
                   <div class="list-item">
                     <div class="list-item-info">
                       <p><strong>${u.name}</strong> (${u.email})</p>
-                      <p>Роль: ${u.role}</p>
+                      <p>Роль: <span class="badge ${u.role === 'admin' ? 'admin' : u.role === 'trainer' ? 'trainer' : 'user'}">${roleNames[u.role] || u.role}</span></p>
                     </div>
                     ${currentUser && currentUser.role === 'admin' ? `
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                      <select class="role-select" onchange="changeUserRole(${u.id}, this.value)" style="padding: 6px 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 12px;">
+                        <option value="user" ${u.role === 'user' ? 'selected' : ''}>Пользователь</option>
+                        <option value="trainer" ${u.role === 'trainer' ? 'selected' : ''}>Тренер</option>
+                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                      </select>
                       <button class="btn btn-secondary btn-small" onclick="showUserModal(${u.id})">Редактировать</button>
                       <button class="btn btn-danger btn-small" onclick="deleteUser(${u.id})">Удалить</button>
                     </div>
@@ -878,6 +945,73 @@ async function loadUsers() {
         if (list) {
             list.innerHTML = '<div class="empty-message">Ошибка загрузки пользователей</div>';
         }
+    }
+}
+
+async function changeUserRole(userId, newRole) {
+    if (!confirm(`Изменить роль пользователя на "${newRole}"?`)) {
+        // Восстанавливаем предыдущее значение
+        loadUsers();
+        return;
+    }
+    
+    try {
+        // Отправляем только роль, пароль НЕ отправляем, чтобы не сбросить его
+        const response = await fetch(`${API_URL}/users/${userId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authToken
+            },
+            body: JSON.stringify({ role: newRole })
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            showNotification('error', 'Ошибка', 'Не удалось изменить роль: ' + error);
+            loadUsers(); // Восстанавливаем список
+            return;
+        }
+        
+        const updated = await response.json();
+        showNotification('success', 'Успешно', `Роль пользователя успешно изменена на "${newRole}"`);
+        loadUsers();
+        
+        // Если изменили роль текущего пользователя, обновляем его данные и интерфейс
+        if (currentUser && currentUser.id === userId) {
+            currentUser.role = newRole;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
+            // Обновляем отображение роли в интерфейсе
+            const roleElement = document.getElementById('user-role');
+            if (roleElement) {
+                roleElement.textContent = newRole;
+                roleElement.className = `badge ${newRole}`;
+            }
+            
+            // Обновляем видимость вкладок
+            updateTabsVisibility();
+            
+            // Если пользователь стал обычным пользователем и был на админской вкладке, переключаем на доступную
+            if (newRole === 'user') {
+                const activeTab = document.querySelector('.tab-content.active');
+                if (activeTab) {
+                    const activeTabId = activeTab.id;
+                    // Проверяем, является ли текущая вкладка админской
+                    const adminTabs = ['users-tab', 'clients-tab', 'subscriptions-tab', 'employees-tab', 'stats-tab'];
+                    if (adminTabs.includes(activeTabId)) {
+                        // Переключаем на первую доступную вкладку (тренировки)
+                        setActiveTab('trainings');
+                    }
+                }
+            }
+            
+            showNotification('info', 'Информация', 'Ваша роль была изменена. Интерфейс обновлен.');
+        }
+    } catch (error) {
+        console.error('Ошибка изменения роли:', error);
+        showNotification('error', 'Ошибка', error.message);
+        loadUsers(); // Восстанавливаем список
     }
 }
 
@@ -988,13 +1122,13 @@ async function deleteClient(id) {
         });
         if (!response.ok) {
             const error = await response.text();
-            alert('Ошибка: ' + error);
+            showNotification('error', 'Ошибка', error);
             return;
         }
         loadClients();
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('Ошибка удаления клиента');
+        showNotification('error', 'Ошибка', 'Не удалось удалить клиента');
     }
 }
 
@@ -1075,7 +1209,7 @@ async function showClientModal(clientId) {
             loadClients();
         } catch (error) {
             console.error('Ошибка обновления клиента:', error);
-            alert('Ошибка: ' + error.message);
+            showNotification('error', 'Ошибка', error.message);
         }
     };
 }
@@ -1169,13 +1303,13 @@ async function deleteSubscription(id) {
         });
         if (!response.ok) {
             const error = await response.text();
-            alert('Ошибка: ' + error);
+            showNotification('error', 'Ошибка', error);
             return;
         }
         loadSubscriptions();
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('Ошибка удаления абонемента');
+        showNotification('error', 'Ошибка', 'Не удалось удалить абонемент');
     }
 }
 
@@ -1271,13 +1405,13 @@ async function showSubscriptionModal() {
         
         const typeValue = document.getElementById('sub-type').value;
         if (!typeValue) {
-            alert('Пожалуйста, выберите тип абонемента');
+            showNotification('warning', 'Предупреждение', 'Пожалуйста, выберите тип абонемента');
             return;
         }
         
         const startDateValue = document.getElementById('sub-start-date').value;
         if (!startDateValue) {
-            alert('Пожалуйста, укажите дату начала');
+            showNotification('warning', 'Предупреждение', 'Пожалуйста, укажите дату начала');
             return;
         }
         
@@ -1303,7 +1437,7 @@ async function showSubscriptionModal() {
             if (!response.ok) {
                 const error = await response.text();
                 console.error('Ошибка создания абонемента:', error);
-                alert('Ошибка: ' + error);
+                showNotification('error', 'Ошибка', error);
                 return;
             }
             
@@ -1314,10 +1448,10 @@ async function showSubscriptionModal() {
             if (activeTab && activeTab.id === 'clients-tab') {
                 loadClients();
             }
-            alert('Абонемент успешно создан!');
+            showNotification('success', 'Успешно', 'Абонемент успешно создан!');
         } catch (error) {
             console.error('Ошибка создания абонемента:', error);
-            alert('Ошибка: ' + error.message);
+            showNotification('error', 'Ошибка', error.message);
         }
     };
 }
@@ -1429,7 +1563,7 @@ async function showSubscriptionEditModal(subscriptionId) {
             loadSubscriptions();
         } catch (error) {
             console.error('Ошибка обновления абонемента:', error);
-            alert('Ошибка: ' + error.message);
+            showNotification('error', 'Ошибка', error.message);
         }
     };
 }
@@ -1515,7 +1649,7 @@ async function deleteEmployee(id) {
         loadEmployees();
     } catch (error) {
         console.error('Ошибка удаления сотрудника:', error);
-        alert('Ошибка: ' + error.message);
+        showNotification('error', 'Ошибка', error.message);
     }
 }
 
@@ -1592,7 +1726,7 @@ async function showEmployeeModal(employeeId) {
             loadEmployees();
         } catch (error) {
             console.error('Ошибка обновления сотрудника:', error);
-            alert('Ошибка: ' + error.message);
+            showNotification('error', 'Ошибка', error.message);
         }
     };
 }
@@ -1709,7 +1843,7 @@ async function showUserModal(userId) {
             }
             
             const result = await resp.json();
-            alert(userId ? 'Пользователь успешно обновлен!' : 'Пользователь успешно создан!');
+            showNotification('success', 'Успешно', userId ? 'Пользователь успешно обновлен!' : 'Пользователь успешно создан!');
             
             closeUserModal();
             loadUsers();
@@ -1723,7 +1857,7 @@ async function showUserModal(userId) {
             }
         } catch (error) {
             console.error('Ошибка:', error);
-            alert('Ошибка: ' + error.message);
+            showNotification('error', 'Ошибка', error.message);
         }
     };
 }
@@ -1732,5 +1866,87 @@ function closeUserModal() {
     const modal = document.getElementById('user-modal');
     if (modal) {
         modal.remove();
+    }
+}
+
+// Загрузка статистики
+async function loadStats() {
+    // Проверяем, что элемент существует
+    const container = document.getElementById('stats-content');
+    if (!container) {
+        console.error('Элемент stats-content не найден в DOM. Убедитесь, что вкладка статистики активна.');
+        showNotification('error', 'Ошибка', 'Элемент статистики не найден. Обновите страницу.');
+        return;
+    }
+    
+    try {
+        // Показываем индикатор загрузки
+        container.innerHTML = '<div class="empty-message">Загрузка статистики...</div>';
+        
+        const response = await fetch(`${API_URL}/stats`, {
+            headers: { 'Authorization': authToken }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Ошибка загрузки статистики: ' + errorText);
+        }
+        
+        const stats = await response.json();
+        
+        container.innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value">${stats.total_users}</div>
+                    <div class="stat-label">Всего пользователей</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🏋️</div>
+                    <div class="stat-value">${stats.total_clients}</div>
+                    <div class="stat-label">Клиентов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">👨‍💼</div>
+                    <div class="stat-value">${stats.total_trainers}</div>
+                    <div class="stat-label">Сотрудников</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-value">${stats.total_trainings}</div>
+                    <div class="stat-label">Всего тренировок</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-value">${stats.active_subscriptions}</div>
+                    <div class="stat-label">Активных абонементов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-value">${Math.round(stats.average_training_duration || 0)}</div>
+                    <div class="stat-label">Средняя длительность (мин)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📆</div>
+                    <div class="stat-value">${stats.upcoming_trainings}</div>
+                    <div class="stat-label">Предстоящих тренировок</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">✓</div>
+                    <div class="stat-value">${stats.completed_trainings}</div>
+                    <div class="stat-label">Завершенных тренировок</div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        const container = document.getElementById('stats-content');
+        if (container) {
+            container.innerHTML = '<div class="empty-message">Ошибка загрузки статистики: ' + error.message + '</div>';
+            showNotification('error', 'Ошибка', 'Не удалось загрузить статистику: ' + error.message);
+        } else {
+            console.error('Элемент stats-content не найден в DOM при обработке ошибки');
+            showNotification('error', 'Ошибка', 'Элемент статистики не найден. Обновите страницу.');
+        }
     }
 }

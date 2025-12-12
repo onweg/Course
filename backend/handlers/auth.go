@@ -9,6 +9,7 @@ import (
 	"fitness-club/models"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -23,23 +24,39 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Попытка входа: email=%s", req.Email)
+	// Нормализуем email (убираем пробелы, приводим к нижнему регистру)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Password = strings.TrimSpace(req.Password)
+	
+	log.Printf("Попытка входа: email='%s' (длина=%d), password='%s' (длина=%d)", 
+		req.Email, len(req.Email), req.Password, len(req.Password))
 
 	if req.Email == "" || req.Password == "" {
+		log.Printf("Пустой email или пароль: email='%s', password='%s'", req.Email, req.Password)
 		http.Error(w, "Email и пароль обязательны", http.StatusBadRequest)
 		return
 	}
 
 	// Проверяем пользователя
 	var user models.User
+	var passwordFromDB string
 	err := database.DB.QueryRow(`
 		SELECT id, name, email, password, role, created_at 
 		FROM users 
-		WHERE email = $1
-	`, req.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role, &user.CreatedAt)
+		WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
+	`, req.Email).Scan(&user.ID, &user.Name, &user.Email, &passwordFromDB, &user.Role, &user.CreatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
+			log.Printf("Пользователь с email '%s' не найден в базе данных", req.Email)
+			// Проверяем, может быть похожий email существует
+			var similarEmail string
+			checkErr := database.DB.QueryRow(`
+				SELECT email FROM users WHERE LOWER(email) LIKE LOWER($1) LIMIT 1
+			`, "%"+strings.Split(req.Email, "@")[0]+"%").Scan(&similarEmail)
+			if checkErr == nil {
+				log.Printf("Найден похожий email в базе: %s (возможно опечатка)", similarEmail)
+			}
 			http.Error(w, "Неверный email или пароль", http.StatusUnauthorized)
 			return
 		}
@@ -48,11 +65,30 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Нормализуем пароль из БД (убираем пробелы)
+	passwordFromDB = strings.TrimSpace(passwordFromDB)
+	
+	// Проверяем, что пароль не пустой в базе данных
+	if passwordFromDB == "" {
+		log.Printf("Пользователь %s (ID: %d) имеет пустой пароль в базе данных", req.Email, user.ID)
+		http.Error(w, "Пароль пользователя не установлен. Обратитесь к администратору", http.StatusUnauthorized)
+		return
+	}
+
+	user.Password = passwordFromDB
+
 	// Проверяем пароль (простая проверка, для курсовой достаточно)
+	log.Printf("Проверка пароля для пользователя %s (ID: %d). Пароль из БД: [%s] (длина=%d), введенный пароль: [%s] (длина=%d)", 
+		req.Email, user.ID, user.Password, len(user.Password), req.Password, len(req.Password))
+	
 	if user.Password != req.Password {
+		log.Printf("Неверный пароль для пользователя %s (ID: %d). Ожидался: [%s] (байты: %v), получен: [%s] (байты: %v)", 
+			req.Email, user.ID, user.Password, []byte(user.Password), req.Password, []byte(req.Password))
 		http.Error(w, "Неверный email или пароль", http.StatusUnauthorized)
 		return
 	}
+	
+	log.Printf("Пароль совпадает для пользователя %s (ID: %d)", req.Email, user.ID)
 
 	// Генерируем токен
 	token, err := generateToken()

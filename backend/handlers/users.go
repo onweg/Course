@@ -115,7 +115,14 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Если пароль не указан, генерируем случайный
 	if u.Password == "" {
 		u.Password = generateRandomPassword()
-		log.Printf("Сгенерирован случайный пароль для пользователя %s", u.Email)
+		log.Printf("Сгенерирован случайный пароль для пользователя %s (длина: %d)", u.Email, len(u.Password))
+	}
+
+	// Убеждаемся, что пароль не пустой
+	if u.Password == "" {
+		log.Printf("Ошибка: пароль пустой для пользователя %s", u.Email)
+		http.Error(w, "Пароль не может быть пустым", http.StatusBadRequest)
+		return
 	}
 
 	if u.Role == "" {
@@ -218,9 +225,10 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем существование пользователя
+	// Проверяем существование пользователя и получаем текущий пароль
 	var exists bool
-	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", id).Scan(&exists)
+	var currentPassword sql.NullString
+	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1), (SELECT password FROM users WHERE id = $1)", id).Scan(&exists, &currentPassword)
 	if err != nil {
 		log.Printf("Ошибка проверки пользователя: %v", err)
 		http.Error(w, "Ошибка проверки пользователя", http.StatusInternalServerError)
@@ -229,6 +237,22 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		http.Error(w, "Пользователь не найден", http.StatusNotFound)
 		return
+	}
+
+	// Если пароль не передан в запросе, проверяем что текущий пароль не пустой
+	if u.Password == "" {
+		if !currentPassword.Valid || currentPassword.String == "" {
+			log.Printf("Ошибка: попытка обновить пользователя %d без пароля, но текущий пароль пустой", id)
+			http.Error(w, "Нельзя обновить пользователя: пароль не установлен. Установите пароль перед изменением роли", http.StatusBadRequest)
+			return
+		}
+		log.Printf("Пароль не изменяется для пользователя %d (текущий пароль существует, длина: %d)", id, len(currentPassword.String))
+	}
+
+	// Проверяем, что если пароль не передан, он не пустой в базе
+	if u.Password == "" && (!currentPassword.Valid || currentPassword.String == "") {
+		log.Printf("Предупреждение: попытка обновить пользователя %d без пароля, но текущий пароль тоже пустой", id)
+		// Не блокируем обновление, но логируем
 	}
 
 	// Если email изменен, проверяем уникальность
@@ -260,10 +284,13 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		args = append(args, u.Email)
 		argNum++
 	}
+	// Пароль обновляем только если он явно передан и не пустой
+	// Это важно, чтобы не сбросить пароль случайно
 	if u.Password != "" {
 		updateFields = append(updateFields, fmt.Sprintf("password = $%d", argNum))
 		args = append(args, u.Password)
 		argNum++
+		log.Printf("Обновление пароля для пользователя %d", id)
 	}
 	if u.Role != "" {
 		updateFields = append(updateFields, fmt.Sprintf("role = $%d", argNum))
@@ -290,6 +317,21 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if rowsAffected == 0 {
 		http.Error(w, "Пользователь не найден", http.StatusNotFound)
 		return
+	}
+
+	// Если роль изменена на "user", создаем клиента, если его нет
+	if u.Role == "user" {
+		var clientExists bool
+		err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM clients WHERE user_id = $1)", id).Scan(&clientExists)
+		if err == nil && !clientExists {
+			_, err = database.DB.Exec("INSERT INTO clients (user_id) VALUES ($1)", id)
+			if err != nil {
+				log.Printf("Ошибка создания клиента при смене роли: %v", err)
+				// Не возвращаем ошибку, так как пользователь уже обновлен
+			} else {
+				log.Printf("Автоматически создан клиент для пользователя %d при смене роли на user", id)
+			}
+		}
 	}
 
 	// Возвращаем обновленного пользователя

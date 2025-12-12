@@ -51,6 +51,7 @@
             <button class="tab-btn" onclick="showTab('clients')" data-tab="clients" data-role="admin">Клиенты</button>
             <button class="tab-btn" onclick="showTab('subscriptions')" data-tab="subscriptions" data-role="admin">Абонементы</button>
             <button class="tab-btn" onclick="showTab('employees')" data-tab="employees" data-role="admin">Сотрудники</button>
+            <button class="tab-btn" onclick="showTab('stats')" data-tab="stats" data-role="admin">Статистика</button>
             <button class="tab-btn" onclick="showTab('about')" data-tab="about">Об авторе</button>
         </nav>
 
@@ -175,6 +176,15 @@
                 <div id="employees-list"></div>
             </div>
 
+            <!-- Вкладка Статистика (только админ) -->
+            <div id="stats-tab" class="tab-content">
+                <div class="page-header">
+                    <h2>Статистика системы</h2>
+                    <button class="btn btn-secondary" onclick="loadStats()">Обновить</button>
+                </div>
+                <div id="stats-content"></div>
+            </div>
+
             <!-- Вкладка Об авторе -->
             <div id="about-tab" class="tab-content">
                 <div class="about-page">
@@ -285,6 +295,9 @@
             </form>
         </div>
     </div>
+
+    <!-- Контейнер для уведомлений -->
+    <div id="notifications-container"></div>
 
     <script src="script.js"></script>
 </body>

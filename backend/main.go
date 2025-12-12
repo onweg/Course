@@ -78,6 +78,9 @@ func main() {
 	api.Handle("/employees/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.UpdateEmployee))).Methods("PUT")
 	api.Handle("/employees/{id}", middleware.AdminOnly(http.HandlerFunc(handlers.DeleteEmployee))).Methods("DELETE")
 
+	// API маршруты для статистики
+	api.HandleFunc("/stats", handlers.GetStats).Methods("GET")
+
 	// Обработчик для несуществующих маршрутов (для отладки)
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Добавляем CORS заголовки даже для 404, чтобы браузер не ругался на CORS
