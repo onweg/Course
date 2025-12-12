@@ -909,7 +909,10 @@ async function loadClients() {
                     }</p>
                 </div>
                 ${currentUser && currentUser.role === 'admin' ? `
-                <button class="btn btn-danger btn-small" onclick="deleteClient(${c.id})">Удалить</button>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn btn-secondary btn-small" onclick="showClientModal(${c.id})">Редактировать</button>
+                    <button class="btn btn-danger btn-small" onclick="deleteClient(${c.id})">Удалить</button>
+                </div>
                 ` : ''}
             </div>
         `;
@@ -939,6 +942,93 @@ async function deleteClient(id) {
     }
 }
 
+// Модальное окно редактирования клиента
+async function showClientModal(clientId) {
+    if (!clientId) return;
+    let client = null;
+    try {
+        const resp = await fetch(`${API_URL}/clients/${clientId}`, {
+            headers: { 'Authorization': authToken }
+        });
+        if (resp.ok) {
+            client = await resp.json();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки клиента:', error);
+    }
+
+    const existing = document.getElementById('client-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'client-modal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class='modal-content'>
+            <span class='close' onclick='closeClientModal()'>&times;</span>
+            <h2>Редактировать клиента</h2>
+            <form id='client-form-modal'>
+                <div class='form-group'>
+                    <label>Телефон</label>
+                    <input id='cm-phone' type='text' placeholder='+7...' value='${client?.phone || ''}'>
+                </div>
+                <div class='form-group'>
+                    <label>Адрес</label>
+                    <input id='cm-address' type='text' value='${client?.address || ''}'>
+                </div>
+                <div class='form-group'>
+                    <label>Дата рождения</label>
+                    <input id='cm-birth' type='date' value='${client?.birth_date ? new Date(client.birth_date).toISOString().split('T')[0] : ''}'>
+                </div>
+                <div class='form-actions'>
+                    <button type='button' class='btn btn-secondary' onclick='closeClientModal()'>Отмена</button>
+                    <button type='submit' class='btn btn-primary'>Сохранить</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('client-form-modal').onsubmit = async (e) => {
+        e.preventDefault();
+        const body = {
+            phone: document.getElementById('cm-phone').value.trim(),
+            address: document.getElementById('cm-address').value.trim()
+        };
+        const birth = document.getElementById('cm-birth').value;
+        if (birth) {
+            body.birth_date = birth;
+        }
+
+        try {
+            const resp = await fetch(`${API_URL}/clients/${clientId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authToken
+                },
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                const err = await resp.text();
+                alert('Ошибка: ' + err);
+                return;
+            }
+            closeClientModal();
+            loadClients();
+        } catch (error) {
+            console.error('Ошибка обновления клиента:', error);
+            alert('Ошибка: ' + error.message);
+        }
+    };
+}
+
+function closeClientModal() {
+    const modal = document.getElementById('client-modal');
+    if (modal) modal.remove();
+}
+
 async function loadSubscriptions() {
     try {
         const response = await fetch(`${API_URL}/subscriptions`, {
@@ -965,7 +1055,10 @@ async function loadSubscriptions() {
                     <p>Статус: <span class="badge ${s.status === 'active' ? 'badge-status scheduled' : 'badge-status cancelled'}">${s.status === 'active' ? 'Активен' : s.status === 'expired' ? 'Истек' : 'Отменен'}</span></p>
                 </div>
                 ${currentUser && currentUser.role === 'admin' ? `
-                <button class="btn btn-danger btn-small" onclick="deleteSubscription(${s.id})">Удалить</button>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn btn-secondary btn-small" onclick="showSubscriptionEditModal(${s.id})">Редактировать</button>
+                    <button class="btn btn-danger btn-small" onclick="deleteSubscription(${s.id})">Удалить</button>
+                </div>
                 ` : ''}
             </div>
         `;
@@ -1145,6 +1238,116 @@ function closeSubscriptionModal() {
     }
 }
 
+// Модальное окно редактирования абонемента
+async function showSubscriptionEditModal(subscriptionId) {
+    if (!subscriptionId) return;
+    let sub = null;
+    try {
+        const resp = await fetch(`${API_URL}/subscriptions/${subscriptionId}`, {
+            headers: { 'Authorization': authToken }
+        });
+        if (resp.ok) {
+            sub = await resp.json();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки абонемента:', error);
+    }
+
+    const existing = document.getElementById('subscription-edit-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'subscription-edit-modal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class='modal-content'>
+            <span class='close' onclick='closeSubscriptionEditModal()'>&times;</span>
+            <h2>Редактировать абонемент</h2>
+            <form id='subscription-edit-form'>
+                <div class='form-group'>
+                    <label>Тип</label>
+                    <select id='se-type' required>
+                        <option value='monthly'>Месячный</option>
+                        <option value='quarterly'>Квартальный</option>
+                        <option value='yearly'>Годовой</option>
+                    </select>
+                </div>
+                <div class='form-group'>
+                    <label>Дата начала</label>
+                    <input id='se-start' type='date' required>
+                </div>
+                <div class='form-group'>
+                    <label>Дата окончания</label>
+                    <input id='se-end' type='date' required>
+                </div>
+                <div class='form-group'>
+                    <label>Цена</label>
+                    <input id='se-price' type='number' min='0' step='0.01' required>
+                </div>
+                <div class='form-group'>
+                    <label>Статус</label>
+                    <select id='se-status' required>
+                        <option value='active'>Активен</option>
+                        <option value='expired'>Истек</option>
+                        <option value='cancelled'>Отменен</option>
+                    </select>
+                </div>
+                <div class='form-actions'>
+                    <button type='button' class='btn btn-secondary' onclick='closeSubscriptionEditModal()'>Отмена</button>
+                    <button type='submit' class='btn btn-primary'>Сохранить</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    if (sub) {
+        document.getElementById('se-type').value = sub.type || 'monthly';
+        document.getElementById('se-start').value = sub.start_date ? new Date(sub.start_date).toISOString().split('T')[0] : '';
+        document.getElementById('se-end').value = sub.end_date ? new Date(sub.end_date).toISOString().split('T')[0] : '';
+        document.getElementById('se-price').value = sub.price ?? '';
+        document.getElementById('se-status').value = sub.status || 'active';
+    }
+
+    document.getElementById('subscription-edit-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const body = {
+            type: document.getElementById('se-type').value,
+            start_date: document.getElementById('se-start').value,
+            end_date: document.getElementById('se-end').value,
+            price: parseFloat(document.getElementById('se-price').value),
+            status: document.getElementById('se-status').value
+        };
+
+        try {
+            const resp = await fetch(`${API_URL}/subscriptions/${subscriptionId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authToken
+                },
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                const err = await resp.text();
+                alert('Ошибка: ' + err);
+                return;
+            }
+            closeSubscriptionEditModal();
+            loadSubscriptions();
+        } catch (error) {
+            console.error('Ошибка обновления абонемента:', error);
+            alert('Ошибка: ' + error.message);
+        }
+    };
+}
+
+function closeSubscriptionEditModal() {
+    const modal = document.getElementById('subscription-edit-modal');
+    if (modal) modal.remove();
+}
+
 async function loadEmployees() {
     try {
         const response = await fetch(`${API_URL}/employees`, {
@@ -1159,11 +1362,119 @@ async function loadEmployees() {
                     <p>Должность: ${e.position}</p>
                     <p>Зарплата: ${e.salary || 'не указана'}</p>
                 </div>
+                ${currentUser && currentUser.role === 'admin' ? `
+                <div style="display:flex;gap:10px;">
+                    <button class="btn btn-secondary btn-small" onclick="showEmployeeModal(${e.id})">Редактировать</button>
+                    <button class="btn btn-danger btn-small" onclick="deleteEmployee(${e.id})">Удалить</button>
+                </div>
+                ` : ''}
             </div>
         `).join('');
     } catch (error) {
         console.error('Ошибка:', error);
     }
+}
+
+async function deleteEmployee(id) {
+    if (!confirm('Удалить сотрудника?')) return;
+    try {
+        const resp = await fetch(`${API_URL}/employees/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': authToken }
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            alert('Ошибка: ' + err);
+            return;
+        }
+        loadEmployees();
+    } catch (error) {
+        console.error('Ошибка удаления сотрудника:', error);
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+async function showEmployeeModal(employeeId) {
+    if (!employeeId) return;
+    let employee = null;
+    try {
+        const resp = await fetch(`${API_URL}/employees/${employeeId}`, {
+            headers: { 'Authorization': authToken }
+        });
+        if (resp.ok) {
+            employee = await resp.json();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки сотрудника:', error);
+    }
+
+    const existing = document.getElementById('employee-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'employee-modal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class='modal-content'>
+            <span class='close' onclick='closeEmployeeModal()'>&times;</span>
+            <h2>Редактировать сотрудника</h2>
+            <form id='employee-form-modal'>
+                <div class='form-group'>
+                    <label>Должность</label>
+                    <input id='em-position' type='text' required value='${employee?.position || ''}'>
+                </div>
+                <div class='form-group'>
+                    <label>Зарплата</label>
+                    <input id='em-salary' type='number' min='0' step='0.01' value='${employee?.salary ?? ''}'>
+                </div>
+                <div class='form-group'>
+                    <label>Дата найма</label>
+                    <input id='em-hire' type='date' value='${employee?.hire_date ? new Date(employee.hire_date).toISOString().split('T')[0] : ''}'>
+                </div>
+                <div class='form-actions'>
+                    <button type='button' class='btn btn-secondary' onclick='closeEmployeeModal()'>Отмена</button>
+                    <button type='submit' class='btn btn-primary'>Сохранить</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('employee-form-modal').onsubmit = async (e) => {
+        e.preventDefault();
+        const body = {
+            position: document.getElementById('em-position').value.trim(),
+            salary: document.getElementById('em-salary').value ? parseFloat(document.getElementById('em-salary').value) : null,
+            hire_date: document.getElementById('em-hire').value
+        };
+
+        try {
+            const resp = await fetch(`${API_URL}/employees/${employeeId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authToken
+                },
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                const err = await resp.text();
+                alert('Ошибка: ' + err);
+                return;
+            }
+            closeEmployeeModal();
+            loadEmployees();
+        } catch (error) {
+            console.error('Ошибка обновления сотрудника:', error);
+            alert('Ошибка: ' + error.message);
+        }
+    };
+}
+
+function closeEmployeeModal() {
+    const modal = document.getElementById('employee-modal');
+    if (modal) modal.remove();
 }
 
 // Модальное окно для создания/редактирования пользователя
