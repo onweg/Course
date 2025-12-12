@@ -820,13 +820,39 @@ async function loadUsers() {
             list.innerHTML = '<div class="empty-message">Ошибка: неверный формат данных</div>';
             return;
         }
-        
+        const searchTerm = (document.getElementById('users-search')?.value || '').toLowerCase();
+        const sort = document.getElementById('users-sort')?.value || '';
+
+        let filtered = users.filter(u => {
+            if (!searchTerm) return true;
+            return (u.name || '').toLowerCase().includes(searchTerm) ||
+                   (u.email || '').toLowerCase().includes(searchTerm);
+        });
+
+        filtered.sort((a, b) => {
+            const by = (field, dir='asc') => {
+                const av = (a[field] || '').toString().toLowerCase();
+                const bv = (b[field] || '').toString().toLowerCase();
+                if (av === bv) return 0;
+                return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+            };
+            switch (sort) {
+                case 'name-asc': return by('name', 'asc');
+                case 'name-desc': return by('name', 'desc');
+                case 'email-asc': return by('email', 'asc');
+                case 'email-desc': return by('email', 'desc');
+                case 'role-asc': return by('role', 'asc');
+                case 'role-desc': return by('role', 'desc');
+                default: return 0;
+            }
+        });
+
         list.innerHTML = '';
-        
-        if (users.length === 0) {
+
+        if (filtered.length === 0) {
             list.innerHTML = '<div class="empty-message">Нет пользователей</div>';
         } else {
-            users.forEach(u => {
+            filtered.forEach(u => {
                 list.innerHTML += `
                   <div class="list-item">
                     <div class="list-item-info">
@@ -886,8 +912,11 @@ async function loadClients() {
             headers: { 'Authorization': authToken }
         });
         const allSubscriptions = await subscriptionsResponse.json();
-        
-        list.innerHTML = clients.map(c => {
+
+        const searchTerm = (document.getElementById('clients-search')?.value || '').toLowerCase();
+        const sort = document.getElementById('clients-sort')?.value || '';
+
+        let prepared = clients.map(c => {
             // Находим активные абонементы для этого клиента
             const activeSubscriptions = (allSubscriptions || []).filter(s => 
                 s.client_id === c.id && 
@@ -896,8 +925,36 @@ async function loadClients() {
             );
             
             const hasActiveSubscription = activeSubscriptions.length > 0;
-            
-            return `
+            return { c, activeSubscriptions, hasActiveSubscription };
+        });
+
+        if (searchTerm) {
+            prepared = prepared.filter(({ c }) => {
+                return (c.user?.name || '').toLowerCase().includes(searchTerm) ||
+                       (c.user?.email || '').toLowerCase().includes(searchTerm) ||
+                       (c.phone || '').toLowerCase().includes(searchTerm);
+            });
+        }
+
+        prepared.sort((a, b) => {
+            const byStr = (av, bv, dir='asc') => {
+                av = (av || '').toString().toLowerCase();
+                bv = (bv || '').toString().toLowerCase();
+                if (av === bv) return 0;
+                return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+            };
+            switch (sort) {
+                case 'name-asc': return byStr(a.c.user?.name, b.c.user?.name, 'asc');
+                case 'name-desc': return byStr(a.c.user?.name, b.c.user?.name, 'desc');
+                case 'email-asc': return byStr(a.c.user?.email, b.c.user?.email, 'asc');
+                case 'email-desc': return byStr(a.c.user?.email, b.c.user?.email, 'desc');
+                case 'has-sub-desc': return (b.hasActiveSubscription === a.hasActiveSubscription) ? 0 : (b.hasActiveSubscription ? 1 : -1);
+                case 'has-sub-asc': return (a.hasActiveSubscription === b.hasActiveSubscription) ? 0 : (a.hasActiveSubscription ? 1 : -1);
+                default: return 0;
+            }
+        });
+
+        list.innerHTML = prepared.map(({ c, activeSubscriptions, hasActiveSubscription }) => `
             <div class="list-item">
                 <div class="list-item-info">
                     <p><strong>${c.user?.name || 'N/A'}</strong> (${c.user?.email || 'N/A'})</p>
@@ -915,8 +972,7 @@ async function loadClients() {
                 </div>
                 ` : ''}
             </div>
-        `;
-        }).join('');
+        `).join('');
     } catch (error) {
         console.error('Ошибка:', error);
         document.getElementById('clients-list').innerHTML = '<div class="empty-message">Ошибка загрузки клиентов</div>';
@@ -1041,8 +1097,43 @@ async function loadSubscriptions() {
             list.innerHTML = '<div class="empty-message">Нет абонементов</div>';
             return;
         }
-        
-        list.innerHTML = subscriptions.map(s => {
+
+        const searchTerm = (document.getElementById('subscriptions-search')?.value || '').toLowerCase();
+        const sort = document.getElementById('subscriptions-sort')?.value || '';
+
+        let filtered = subscriptions.filter(s => {
+            if (!searchTerm) return true;
+            const clientName = s.client?.user?.name || '';
+            return (s.type || '').toLowerCase().includes(searchTerm) ||
+                   (s.status || '').toLowerCase().includes(searchTerm) ||
+                   clientName.toLowerCase().includes(searchTerm);
+        });
+
+        filtered.sort((a, b) => {
+            const byStr = (av, bv, dir='asc') => {
+                av = (av || '').toString().toLowerCase();
+                bv = (bv || '').toString().toLowerCase();
+                if (av === bv) return 0;
+                return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+            };
+            const byDate = (av, bv, dir='asc') => {
+                const da = av ? new Date(av).getTime() : 0;
+                const db = bv ? new Date(bv).getTime() : 0;
+                if (da === db) return 0;
+                return dir === 'asc' ? (da - db) : (db - da);
+            };
+            switch (sort) {
+                case 'type-asc': return byStr(a.type, b.type, 'asc');
+                case 'type-desc': return byStr(a.type, b.type, 'desc');
+                case 'start-asc': return byDate(a.start_date, b.start_date, 'asc');
+                case 'start-desc': return byDate(a.start_date, b.start_date, 'desc');
+                case 'status-asc': return byStr(a.status, b.status, 'asc');
+                case 'status-desc': return byStr(a.status, b.status, 'desc');
+                default: return 0;
+            }
+        });
+
+        list.innerHTML = filtered.map(s => {
             const startDate = s.start_date ? new Date(s.start_date).toLocaleDateString('ru-RU') : 'N/A';
             const endDate = s.end_date ? new Date(s.end_date).toLocaleDateString('ru-RU') : 'N/A';
             const clientName = s.client?.user?.name || 'N/A';
@@ -1355,7 +1446,41 @@ async function loadEmployees() {
         });
         const employees = await response.json();
         const list = document.getElementById('employees-list');
-        list.innerHTML = employees.map(e => `
+        
+        const searchTerm = (document.getElementById('employees-search')?.value || '').toLowerCase();
+        const sort = document.getElementById('employees-sort')?.value || '';
+
+        let filtered = employees.filter(e => {
+            if (!searchTerm) return true;
+            return (e.user?.name || '').toLowerCase().includes(searchTerm) ||
+                   (e.position || '').toLowerCase().includes(searchTerm);
+        });
+
+        filtered.sort((a, b) => {
+            const byStr = (av, bv, dir='asc') => {
+                av = (av || '').toString().toLowerCase();
+                bv = (bv || '').toString().toLowerCase();
+                if (av === bv) return 0;
+                return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+            };
+            const byNum = (av, bv, dir='asc') => {
+                const aNum = av ?? 0;
+                const bNum = bv ?? 0;
+                if (aNum === bNum) return 0;
+                return dir === 'asc' ? aNum - bNum : bNum - aNum;
+            };
+            switch (sort) {
+                case 'name-asc': return byStr(a.user?.name, b.user?.name, 'asc');
+                case 'name-desc': return byStr(a.user?.name, b.user?.name, 'desc');
+                case 'position-asc': return byStr(a.position, b.position, 'asc');
+                case 'position-desc': return byStr(a.position, b.position, 'desc');
+                case 'salary-desc': return byNum(a.salary, b.salary, 'desc');
+                case 'salary-asc': return byNum(a.salary, b.salary, 'asc');
+                default: return 0;
+            }
+        });
+
+        list.innerHTML = filtered.map(e => `
             <div class="list-item">
                 <div class="list-item-info">
                     <p><strong>${e.user?.name || 'N/A'}</strong></p>

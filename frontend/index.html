@@ -99,6 +99,18 @@
                     <h2>Пользователи</h2>
                     <button class="btn btn-primary" onclick="showUserModal(null)">+ Добавить пользователя</button>
                 </div>
+                <div class="filters">
+                    <input id="users-search" type="text" placeholder="Поиск по имени или email" oninput="loadUsers()">
+                    <select id="users-sort" onchange="loadUsers()">
+                        <option value="">Без сортировки</option>
+                        <option value="name-asc">Имя ↑</option>
+                        <option value="name-desc">Имя ↓</option>
+                        <option value="email-asc">Email ↑</option>
+                        <option value="email-desc">Email ↓</option>
+                        <option value="role-asc">Роль ↑</option>
+                        <option value="role-desc">Роль ↓</option>
+                    </select>
+                </div>
                 <div id="users-list"></div>
             </div>
 
@@ -106,6 +118,18 @@
             <div id="clients-tab" class="tab-content">
                 <div class="page-header">
                     <h2>Клиенты</h2>
+                </div>
+                <div class="filters">
+                    <input id="clients-search" type="text" placeholder="Поиск по имени, email, телефону" oninput="loadClients()">
+                    <select id="clients-sort" onchange="loadClients()">
+                        <option value="">Без сортировки</option>
+                        <option value="name-asc">Имя ↑</option>
+                        <option value="name-desc">Имя ↓</option>
+                        <option value="email-asc">Email ↑</option>
+                        <option value="email-desc">Email ↓</option>
+                        <option value="has-sub-desc">Есть активный абонемент ↑</option>
+                        <option value="has-sub-asc">Есть активный абонемент ↓</option>
+                    </select>
                 </div>
                 <div id="clients-list"></div>
             </div>
@@ -116,6 +140,18 @@
                     <h2>Абонементы</h2>
                     <button class="btn btn-primary" onclick="showSubscriptionModal()">+ Добавить абонемент</button>
                 </div>
+                <div class="filters">
+                    <input id="subscriptions-search" type="text" placeholder="Поиск по типу, клиенту, статусу" oninput="loadSubscriptions()">
+                    <select id="subscriptions-sort" onchange="loadSubscriptions()">
+                        <option value="">Без сортировки</option>
+                        <option value="type-asc">Тип ↑</option>
+                        <option value="type-desc">Тип ↓</option>
+                        <option value="start-asc">Дата начала ↑</option>
+                        <option value="start-desc">Дата начала ↓</option>
+                        <option value="status-asc">Статус ↑</option>
+                        <option value="status-desc">Статус ↓</option>
+                    </select>
+                </div>
                 <div id="subscriptions-list"></div>
             </div>
 
@@ -123,6 +159,18 @@
             <div id="employees-tab" class="tab-content">
                 <div class="page-header">
                     <h2>Сотрудники</h2>
+                </div>
+                <div class="filters">
+                    <input id="employees-search" type="text" placeholder="Поиск по имени или должности" oninput="loadEmployees()">
+                    <select id="employees-sort" onchange="loadEmployees()">
+                        <option value="">Без сортировки</option>
+                        <option value="name-asc">Имя ↑</option>
+                        <option value="name-desc">Имя ↓</option>
+                        <option value="position-asc">Должность ↑</option>
+                        <option value="position-desc">Должность ↓</option>
+                        <option value="salary-desc">Зарплата ↑</option>
+                        <option value="salary-asc">Зарплата ↓</option>
+                    </select>
                 </div>
                 <div id="employees-list"></div>
             </div>
