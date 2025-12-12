@@ -225,10 +225,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем существование пользователя и получаем текущий пароль
+	// Проверяем существование пользователя и получаем текущий пароль и роль
 	var exists bool
 	var currentPassword sql.NullString
-	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1), (SELECT password FROM users WHERE id = $1)", id).Scan(&exists, &currentPassword)
+	var currentRole string
+	err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1), (SELECT password FROM users WHERE id = $1), (SELECT role FROM users WHERE id = $1)", id).Scan(&exists, &currentPassword, &currentRole)
 	if err != nil {
 		log.Printf("Ошибка проверки пользователя: %v", err)
 		http.Error(w, "Ошибка проверки пользователя", http.StatusInternalServerError)
@@ -319,17 +320,63 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Если роль изменена на "user", создаем клиента, если его нет
-	if u.Role == "user" {
-		var clientExists bool
-		err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM clients WHERE user_id = $1)", id).Scan(&clientExists)
-		if err == nil && !clientExists {
-			_, err = database.DB.Exec("INSERT INTO clients (user_id) VALUES ($1)", id)
+	// Если роль была изменена, синхронизируем связанные записи
+	if u.Role != "" && u.Role != currentRole {
+		log.Printf("Роль пользователя %d изменена с '%s' на '%s'", id, currentRole, u.Role)
+		
+		// Удаляем старые записи в зависимости от новой роли
+		if u.Role == "user" {
+			// Меняем на user: удаляем сотрудника, создаем клиента
+			_, err = database.DB.Exec("DELETE FROM employees WHERE user_id = $1", id)
 			if err != nil {
-				log.Printf("Ошибка создания клиента при смене роли: %v", err)
-				// Не возвращаем ошибку, так как пользователь уже обновлен
+				log.Printf("Ошибка удаления сотрудника при смене роли на user: %v", err)
 			} else {
-				log.Printf("Автоматически создан клиент для пользователя %d при смене роли на user", id)
+				log.Printf("Удален сотрудник для пользователя %d", id)
+			}
+			
+			var clientExists bool
+			err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM clients WHERE user_id = $1)", id).Scan(&clientExists)
+			if err == nil && !clientExists {
+				_, err = database.DB.Exec("INSERT INTO clients (user_id) VALUES ($1)", id)
+				if err != nil {
+					log.Printf("Ошибка создания клиента при смене роли: %v", err)
+				} else {
+					log.Printf("Автоматически создан клиент для пользователя %d при смене роли на user", id)
+				}
+			}
+		} else if u.Role == "trainer" {
+			// Меняем на trainer: удаляем клиента, создаем сотрудника
+			_, err = database.DB.Exec("DELETE FROM clients WHERE user_id = $1", id)
+			if err != nil {
+				log.Printf("Ошибка удаления клиента при смене роли на trainer: %v", err)
+			} else {
+				log.Printf("Удален клиент для пользователя %d", id)
+			}
+			
+			var employeeExists bool
+			err = database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM employees WHERE user_id = $1)", id).Scan(&employeeExists)
+			if err == nil && !employeeExists {
+				_, err = database.DB.Exec("INSERT INTO employees (user_id, position, hire_date) VALUES ($1, $2, CURRENT_DATE)", id, "Тренер")
+				if err != nil {
+					log.Printf("Ошибка создания сотрудника при смене роли: %v", err)
+				} else {
+					log.Printf("Автоматически создан сотрудник для пользователя %d при смене роли на trainer", id)
+				}
+			}
+		} else if u.Role == "admin" {
+			// Меняем на admin: удаляем и клиента и сотрудника
+			_, err = database.DB.Exec("DELETE FROM clients WHERE user_id = $1", id)
+			if err != nil {
+				log.Printf("Ошибка удаления клиента при смене роли на admin: %v", err)
+			} else {
+				log.Printf("Удален клиент для пользователя %d", id)
+			}
+			
+			_, err = database.DB.Exec("DELETE FROM employees WHERE user_id = $1", id)
+			if err != nil {
+				log.Printf("Ошибка удаления сотрудника при смене роли на admin: %v", err)
+			} else {
+				log.Printf("Удален сотрудник для пользователя %d", id)
 			}
 		}
 	}
