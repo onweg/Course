@@ -31,6 +31,7 @@ func main() {
 
 	// Публичные маршруты (без авторизации)
 	r.HandleFunc("/api/auth/login", handlers.Login).Methods("POST")
+	r.HandleFunc("/api/auth/register", handlers.Register).Methods("POST")
 
 	// Защищенные маршруты (требуют авторизации)
 	api := r.PathPrefix("/api").Subrouter()

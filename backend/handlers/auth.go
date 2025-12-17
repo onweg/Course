@@ -182,3 +182,82 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
+// Register обрабатывает регистрацию нового пользователя
+func Register(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Name     string `json:"name"`
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Некорректные данные", http.StatusBadRequest)
+        return
+    }
+    // Базовая проверка
+    req.Name = strings.TrimSpace(req.Name)
+    req.Email = strings.TrimSpace(req.Email)
+    req.Password = strings.TrimSpace(req.Password)
+    if req.Name == "" || req.Email == "" || req.Password == "" {
+        http.Error(w, "Все поля обязательны", http.StatusBadRequest)
+        return
+    }
+    // Проверка уникальности email
+    var exists int
+    err := database.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE email = $1`, req.Email).Scan(&exists)
+    if err != nil || exists > 0 {
+        http.Error(w, "Пользователь с таким email уже существует", http.StatusConflict)
+        return
+    }
+    // Создание пользователя
+    var id int
+    err = database.DB.QueryRow(`
+        INSERT INTO users (name, email, password, role)
+        VALUES ($1, $2, $3, 'user') RETURNING id
+    `, req.Name, req.Email, req.Password).Scan(&id)
+    if err != nil {
+        http.Error(w, "Ошибка создания пользователя", http.StatusInternalServerError)
+        return
+    }
+
+    // Загружаем созданного пользователя
+    var user models.User
+    err = database.DB.QueryRow(`
+        SELECT id, name, email, role, created_at
+        FROM users
+        WHERE id = $1
+    `, id).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.CreatedAt)
+    if err != nil {
+        http.Error(w, "Ошибка чтения созданного пользователя", http.StatusInternalServerError)
+        return
+    }
+
+    // Генерируем токен и создаем сессию, как при логине
+    token, err := generateToken()
+    if err != nil {
+        log.Printf("Ошибка генерации токена при регистрации: %v", err)
+        http.Error(w, "Ошибка создания сессии", http.StatusInternalServerError)
+        return
+    }
+
+    expiresAt := time.Now().Add(24 * time.Hour)
+    _, err = database.DB.Exec(`
+        INSERT INTO sessions (user_id, token, expires_at)
+        VALUES ($1, $2, $3)
+    `, user.ID, token, expiresAt)
+    if err != nil {
+        log.Printf("Ошибка создания сессии при регистрации: %v", err)
+        http.Error(w, "Ошибка создания сессии", http.StatusInternalServerError)
+        return
+    }
+
+    // Формируем такой же ответ, как при логине
+    response := models.LoginResponse{
+        Token: token,
+        User:  user,
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    // Можно оставить 201, чтобы явно обозначить создание
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(response)
+}

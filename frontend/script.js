@@ -55,6 +55,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
+
+    const registerForm = document.getElementById('register-form');
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+    }
+
+    const toRegisterLink = document.getElementById('to-register-link');
+    if (toRegisterLink) {
+        toRegisterLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showRegister();
+        });
+    }
+
+    const toLoginLink = document.getElementById('to-login-link');
+    if (toLoginLink) {
+        toLoginLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showLogin();
+        });
+    }
     
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
@@ -106,12 +127,32 @@ document.addEventListener('DOMContentLoaded', () => {
 // Показать страницу логина
 function showLogin() {
     const loginPage = document.getElementById('login-page');
+    const registerPage = document.getElementById('register-page');
     const appPage = document.getElementById('app-page');
     
     if (loginPage) {
         loginPage.classList.add('active');
     }
-    
+    if (registerPage) {
+        registerPage.classList.remove('active');
+    }
+    if (appPage) {
+        appPage.classList.remove('active');
+    }
+}
+
+// Показать страницу регистрации
+function showRegister() {
+    const loginPage = document.getElementById('login-page');
+    const registerPage = document.getElementById('register-page');
+    const appPage = document.getElementById('app-page');
+
+    if (registerPage) {
+        registerPage.classList.add('active');
+    }
+    if (loginPage) {
+        loginPage.classList.remove('active');
+    }
     if (appPage) {
         appPage.classList.remove('active');
     }
@@ -159,15 +200,11 @@ function showApp() {
     
     try {
         const loginPage = document.getElementById('login-page');
+        const registerPage = document.getElementById('register-page');
         const appPage = document.getElementById('app-page');
         
         console.log('loginPage:', loginPage);
         console.log('appPage:', appPage);
-        
-        if (!loginPage) {
-            console.error('Элемент login-page не найден!');
-            return;
-        }
         
         if (!appPage) {
             console.error('Элемент app-page не найден!');
@@ -175,7 +212,12 @@ function showApp() {
         }
         
         // Переключаем страницы через классы
-        loginPage.classList.remove('active');
+        if (loginPage) {
+            loginPage.classList.remove('active');
+        }
+        if (registerPage) {
+            registerPage.classList.remove('active');
+        }
         appPage.classList.add('active');
         
         console.log('Страницы переключены');
@@ -294,6 +336,66 @@ async function handleLogin(e) {
         console.error('Тип ошибки:', error.name);
         console.error('Сообщение:', error.message);
         showNotification('error', 'Ошибка подключения', 'Не удалось подключиться к серверу: ' + error.message);
+    }
+}
+
+// Регистрация нового пользователя
+async function handleRegister(e) {
+    e.preventDefault();
+    const name = document.getElementById('register-name').value;
+    const email = document.getElementById('register-email').value;
+    const password = document.getElementById('register-password').value;
+
+    try {
+        console.log('Попытка регистрации:', email);
+        const response = await fetch(`${API_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
+
+        console.log('Ответ регистрации:', response.status, response.statusText);
+
+        if (response.status === 409) {
+            // Такой email уже существует
+            const errorText = await response.text();
+            showNotification(
+                'warning',
+                'Пользователь уже существует',
+                errorText || 'Пользователь с таким email уже зарегистрирован'
+            );
+            return;
+        }
+
+        if (!response.ok) {
+            const error = await response.text();
+            showNotification('error', 'Ошибка регистрации', error || 'Не удалось зарегистрировать пользователя');
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.token || !data.user) {
+            showNotification('error', 'Ошибка', 'Неполные данные от сервера при регистрации');
+            return;
+        }
+
+        authToken = data.token;
+        currentUser = data.user;
+
+        // Сохраняем сессию
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+        // Очищаем форму регистрации
+        const registerForm = document.getElementById('register-form');
+        if (registerForm) {
+            registerForm.reset();
+        }
+
+        showNotification('success', 'Успешно', 'Регистрация выполнена, вы вошли в систему');
+        showApp();
+    } catch (error) {
+        showNotification('error', 'Ошибка регистрации', error.message);
     }
 }
 
